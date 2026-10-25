@@ -1,974 +1,40 @@
--- =========================================================================
---  VIBECODED WITH THE BEST EVER AI - JOMA SUITE
---  Game: JUST ONE MORE ASYM (Place ID: 130522875331172)
--- =========================================================================
-
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
-local UserInputService = game:GetService("UserInputService")
-local CoreGui = game:GetService("CoreGui")
-local Lighting = game:GetService("Lighting")
-local VirtualInputManager = game:GetService("VirtualInputManager")
-
-local LocalPlayer = Players.LocalPlayer
-local Camera = workspace.CurrentCamera
-
--- Clean previous instances
-if getgenv().VibeBeachUI and typeof(getgenv().VibeBeachUI) == "Instance" then
-    getgenv().VibeBeachUI:Destroy()
-end
-if getgenv().VibeBeachCleanups then
-    for _, c in ipairs(getgenv().VibeBeachCleanups) do
-        pcall(function() c:Disconnect() end)
-    end
-end
-getgenv().VibeBeachCleanups = {}
-
-if getgenv().VibeFlyCleanup then
-    pcall(getgenv().VibeFlyCleanup)
-end
-if getgenv().VibeDrawings then
-    for _, d in ipairs(getgenv().VibeDrawings) do
-        pcall(function() d:Remove() end)
-    end
-end
-getgenv().VibeDrawings = {}
-
-for _, folderName in ipairs({"Entities", "Survivors"}) do
-    local f = workspace:FindFirstChild(folderName)
-    if f then
-        for _, char in ipairs(f:GetChildren()) do
-            local bb = char:FindFirstChild("VibeStatusBillboard", true)
-            if bb then bb:Destroy() end
-        end
-    end
-end
-
-local guiParent = (gethui and gethui()) or CoreGui or LocalPlayer:WaitForChild("PlayerGui")
-
--- Master Configuration
-local Config = {
-    -- Tab 1: Visuals
-    AberrantESP = false,
-    AdversaryESP = false,
-    SurvivorESP = false,
-    Tracers = false,
-    ESPBoxes = false, -- Status Billboards
-    -- Tab 2: Movement
-    SpeedEnabled = false,
-    SpeedValue = 50,
-    JumpEnabled = false,
-    JumpValue = 75,
-    InfiniteJump = false,
-    Noclip = false,
-    FlyEnabled = false,
-    FlySpeed = 50,
-    -- Tab 3: Match Radar
-    ProximityAlert = true,
-    ProximityDist = 60,
-    RemoveBarriers = false,
-    -- Tab 4: Ambience & FX
-    Fullbright = false,
-    NoFog = false,
-    CleanScreenFX = false,
-    AntiRagdoll = false,
-    -- Tab 5: Killer's Helper (Combat)
-    TargetRole = "Survivors",
-    TargetLock = false,
-    Lock360 = true, -- 360-Degree Acquisition
-    LockSmoothness = 5,
-    ShowFOV = false,
-    FOVRadius = 150,
-    AttackRange = 18,
-    AutoSwing = false,
-    LookAtTarget = false,
-    PathPrediction = false,
-    -- Tab 6: Survivor's Helper
-    AutoEvade = false,
-    EvadeDistance = 30,
-    EscapeVector = false,
-    MedAlert = true,
-    AntiStagger = false,
-    -- Tab 7: Settings & UI
-    BGOpacity = 0, -- Solid beach
-    ButtonOpacity = 0.85, -- Frosted glass
-    CurrentWallpaper = "rbxthumb://type=Asset&id=5164275208&w=768&h=432",
-    FloatingPill = true
-}
-getgenv().VibeConfig = Config
-
-local origLighting = {
-    Ambient = Lighting.Ambient,
-    OutdoorAmbient = Lighting.OutdoorAmbient,
-    Brightness = Lighting.Brightness,
-    ClockTime = Lighting.ClockTime,
-    FogEnd = Lighting.FogEnd
-}
-
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "VibecodedBestEverAI"
-ScreenGui.ResetOnSpawn = false
-ScreenGui.DisplayOrder = 999
-ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-ScreenGui.Parent = guiParent
-getgenv().VibeBeachUI = ScreenGui
-
--- Floating Beach Pill
-local PillBtn = Instance.new("TextButton")
-PillBtn.Name = "VibeFloatingPill"
-PillBtn.Size = UDim2.fromOffset(105, 34)
-PillBtn.Position = UDim2.new(0, 16, 0.5, -17)
-PillBtn.BackgroundColor3 = Color3.fromRGB(15, 23, 42)
-PillBtn.BackgroundTransparency = 0.25
-PillBtn.Text = "🏝️ Vibe Menu"
-PillBtn.TextColor3 = Color3.fromRGB(56, 189, 248)
-PillBtn.Font = Enum.Font.GothamBold
-PillBtn.TextSize = 13
-PillBtn.ZIndex = 200
-PillBtn.Parent = ScreenGui
-
-local PillCorner = Instance.new("UICorner")
-PillCorner.CornerRadius = UDim.new(1, 0)
-PillCorner.Parent = PillBtn
-
-local PillStroke = Instance.new("UIStroke")
-PillStroke.Color = Color3.fromRGB(56, 189, 248)
-PillStroke.Thickness = 1.5
-PillStroke.Parent = PillBtn
-
--- Danger Banner HUD
-local DangerBanner = Instance.new("Frame")
-DangerBanner.Name = "DangerBanner"
-DangerBanner.Size = UDim2.fromOffset(360, 42)
-DangerBanner.Position = UDim2.new(0.5, -180, 0, 18)
-DangerBanner.BackgroundColor3 = Color3.fromRGB(153, 27, 27)
-DangerBanner.BackgroundTransparency = 0.2
-DangerBanner.BorderSizePixel = 0
-DangerBanner.Visible = false
-DangerBanner.ZIndex = 150
-DangerBanner.Parent = ScreenGui
-
-local DangerCorner = Instance.new("UICorner")
-DangerCorner.CornerRadius = UDim.new(0, 10)
-DangerCorner.Parent = DangerBanner
-
-local DangerStroke = Instance.new("UIStroke")
-DangerStroke.Color = Color3.fromRGB(248, 113, 113)
-DangerStroke.Thickness = 1.5
-DangerStroke.Parent = DangerBanner
-
-local DangerText = Instance.new("TextLabel")
-DangerText.Size = UDim2.fromScale(1, 1)
-DangerText.BackgroundTransparency = 1
-DangerText.Text = "⚠️ DANGER: OPPONENT APPROACHING"
-DangerText.TextColor3 = Color3.fromRGB(254, 226, 226)
-DangerText.Font = Enum.Font.GothamBold
-DangerText.TextSize = 13
-DangerText.ZIndex = 151
-DangerText.Parent = DangerBanner
-
--- Main Window Frame
-local MainFrame = Instance.new("Frame")
-MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.fromOffset(700, 470)
-MainFrame.Position = UDim2.new(0.5, -350, 0.5, -235)
-MainFrame.BackgroundColor3 = Color3.fromRGB(10, 15, 25)
-MainFrame.BorderSizePixel = 0
-MainFrame.ClipsDescendants = true
-MainFrame.Active = true
-MainFrame.Parent = ScreenGui
-
-local function ToggleMenu()
-    MainFrame.Visible = not MainFrame.Visible
-end
-PillBtn.Activated:Connect(ToggleMenu)
-
-local MainCorner = Instance.new("UICorner")
-MainCorner.CornerRadius = UDim.new(0, 16)
-MainCorner.Parent = MainFrame
-
-local MainStroke = Instance.new("UIStroke")
-MainStroke.Name = "AccentStroke"
-MainStroke.Color = Color3.fromRGB(56, 189, 248)
-MainStroke.Thickness = 1.8
-MainStroke.Transparency = 0.1
-MainStroke.Parent = MainFrame
-
--- SOLID Beach Wallpaper (No transparency)
-local BeachBG = Instance.new("ImageLabel")
-BeachBG.Name = "BeachBackground"
-BeachBG.Size = UDim2.fromScale(1, 1)
-BeachBG.Position = UDim2.fromScale(0, 0)
-BeachBG.BackgroundTransparency = 1
-BeachBG.Image = Config.CurrentWallpaper
-BeachBG.ScaleType = Enum.ScaleType.Crop
-BeachBG.ImageTransparency = 0
-BeachBG.ZIndex = 1
-BeachBG.Parent = MainFrame
-
--- TopBar
-local TopBar = Instance.new("Frame")
-TopBar.Name = "TopBar"
-TopBar.Size = UDim2.new(1, 0, 0, 52)
-TopBar.BackgroundColor3 = Color3.fromRGB(15, 23, 42)
-TopBar.BackgroundTransparency = 0.60
-TopBar.BorderSizePixel = 0
-TopBar.ZIndex = 10
-TopBar.Active = true
-TopBar.Parent = MainFrame
-
-local MenuIcon = Instance.new("ImageLabel")
-MenuIcon.Name = "MenuIcon"
-MenuIcon.Size = UDim2.new(0, 32, 0, 32)
-MenuIcon.Position = UDim2.new(0, 12, 0.5, -16)
-MenuIcon.BackgroundTransparency = 1
-MenuIcon.Image = "rbxassetid://104919049969988"
-MenuIcon.ScaleType = Enum.ScaleType.Fit
-MenuIcon.ZIndex = 12
-MenuIcon.Parent = TopBar
-
-local TitleLabel = Instance.new("TextLabel")
-TitleLabel.Name = "TitleLabel"
-TitleLabel.Size = UDim2.new(0, 320, 1, 0)
-TitleLabel.Position = UDim2.new(0, 52, 0, 0)
-TitleLabel.BackgroundTransparency = 1
-TitleLabel.Text = "Vibecoded with the best ever ai"
-TitleLabel.TextColor3 = Color3.fromRGB(240, 249, 255)
-TitleLabel.Font = Enum.Font.GothamBold
-TitleLabel.TextSize = 16
-TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
-TitleLabel.ZIndex = 11
-TitleLabel.Active = false
-TitleLabel.Parent = TopBar
-
-local Subtitle = Instance.new("TextLabel")
-Subtitle.Name = "Subtitle"
-Subtitle.Size = UDim2.new(0, 140, 1, 0)
-Subtitle.Position = UDim2.new(0, 375, 0, 0)
-Subtitle.BackgroundTransparency = 1
-Subtitle.Text = "• JOMA Suite"
-Subtitle.TextColor3 = Color3.fromRGB(56, 189, 248)
-Subtitle.Font = Enum.Font.GothamMedium
-Subtitle.TextSize = 13
-Subtitle.TextXAlignment = Enum.TextXAlignment.Left
-Subtitle.ZIndex = 11
-Subtitle.Active = false
-Subtitle.Parent = TopBar
-
-local CloseBtn = Instance.new("TextButton")
-CloseBtn.Name = "CloseBtn"
-CloseBtn.Size = UDim2.fromOffset(32, 32)
-CloseBtn.Position = UDim2.new(1, -44, 0.5, -16)
-CloseBtn.BackgroundColor3 = Color3.fromRGB(239, 68, 68)
-CloseBtn.BackgroundTransparency = 0.2
-CloseBtn.Text = "✕"
-CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-CloseBtn.Font = Enum.Font.GothamBold
-CloseBtn.TextSize = 14
-CloseBtn.ZIndex = 25
-CloseBtn.Parent = TopBar
-
-local CloseCorner = Instance.new("UICorner")
-CloseCorner.CornerRadius = UDim.new(0, 8)
-CloseCorner.Parent = CloseBtn
-CloseBtn.Activated:Connect(ToggleMenu)
-
--- Butter-Smooth Dragging
-local dragging = false
-local dragStart, startPos
-TopBar.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        local mx = input.Position.X
-        local my = input.Position.Y
-        local cx = CloseBtn.AbsolutePosition.X
-        local cy = CloseBtn.AbsolutePosition.Y
-        local cw = CloseBtn.AbsoluteSize.X
-        local ch = CloseBtn.AbsoluteSize.Y
-        if mx >= cx and mx <= cx + cw and my >= cy and my <= cy + ch then return end
-        dragging = true
-        dragStart = input.Position
-        startPos = MainFrame.Position
-    end
-end)
-
-local dragMoveConn = UserInputService.InputChanged:Connect(function(input)
-    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-        local delta = input.Position - dragStart
-        MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-    end
-end)
-table.insert(getgenv().VibeBeachCleanups, dragMoveConn)
-
-local dragEndConn = UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = false
-    end
-end)
-table.insert(getgenv().VibeBeachCleanups, dragEndConn)
-
--- Sidebar (78% glass)
-local Sidebar = Instance.new("Frame")
-Sidebar.Name = "Sidebar"
-Sidebar.Size = UDim2.new(0, 180, 1, -52)
-Sidebar.Position = UDim2.new(0, 0, 0, 52)
-Sidebar.BackgroundColor3 = Color3.fromRGB(15, 23, 42)
-Sidebar.BackgroundTransparency = 0.78
-Sidebar.BorderSizePixel = 0
-Sidebar.ZIndex = 10
-Sidebar.Parent = MainFrame
-
-local SideLayout = Instance.new("UIListLayout")
-SideLayout.SortOrder = Enum.SortOrder.LayoutOrder
-SideLayout.Padding = UDim.new(0, 5)
-SideLayout.Parent = Sidebar
-
-local SidePadding = Instance.new("UIPadding")
-SidePadding.PaddingTop = UDim.new(0, 8)
-SidePadding.PaddingLeft = UDim.new(0, 8)
-SidePadding.PaddingRight = UDim.new(0, 8)
-SidePadding.Parent = Sidebar
-
-local ContentArea = Instance.new("Frame")
-ContentArea.Name = "ContentArea"
-ContentArea.Size = UDim2.new(1, -180, 1, -52)
-ContentArea.Position = UDim2.new(0, 180, 0, 52)
-ContentArea.BackgroundTransparency = 1
-ContentArea.ZIndex = 10
-ContentArea.Parent = MainFrame
-
-local Tabs = {
-    {Id = "Visuals", Name = "👁️ Visuals & ESP", Order = 1},
-    {Id = "Movement", Name = "⚡ Movement", Order = 2},
-    {Id = "Radar", Name = "🎯 Match Radar", Order = 3},
-    {Id = "Ambience", Name = "🌅 Ambience & FX", Order = 4},
-    {Id = "Combat", Name = "⚔️ Killer's Helper", Order = 5},
-    {Id = "Survivor", Name = "🛡️ Survivor's Helper", Order = 6},
-    {Id = "Settings", Name = "⚙️ Settings & UI", Order = 7}
-}
-
-local TabFrames = {}
-local TabButtons = {}
-
-for _, tabInfo in ipairs(Tabs) do
-    local tabBtn = Instance.new("TextButton")
-    tabBtn.Name = tabInfo.Id .. "TabBtn"
-    tabBtn.Size = UDim2.new(1, 0, 0, 36)
-    tabBtn.BackgroundColor3 = (tabInfo.Id == "Visuals") and Color3.fromRGB(14, 165, 233) or Color3.fromRGB(30, 41, 59)
-    tabBtn.BackgroundTransparency = (tabInfo.Id == "Visuals") and 0.45 or 0.85
-    tabBtn.Text = tabInfo.Name
-    tabBtn.TextColor3 = Color3.fromRGB(241, 245, 249)
-    tabBtn.Font = Enum.Font.GothamMedium
-    tabBtn.TextSize = 12
-    tabBtn.LayoutOrder = tabInfo.Order
-    tabBtn.ZIndex = 12
-    tabBtn.Parent = Sidebar
+--[[
+Wallpaper update Uwu ❤️❤️❤️
+]]
+local success, err = pcall(function()
+    local Players = game:GetService("Players")
+    local RunService = game:GetService("RunService")
+    local TweenService = game:GetService("TweenService")
+    local UserInputService = game:GetService("UserInputService")
+    local CoreGui = game:GetService("CoreGui")
+    local Lighting = game:GetService("Lighting")
+    local VirtualInputManager = game:GetService("VirtualInputManager")
+    local HttpService = game:GetService("HttpService")
     
-    local tabCorner = Instance.new("UICorner")
-    tabCorner.CornerRadius = UDim.new(0, 8)
-    tabCorner.Parent = tabBtn
+    local LocalPlayer = Players.LocalPlayer
+    local Camera = workspace.CurrentCamera
     
-    local page = Instance.new("ScrollingFrame")
-    page.Name = tabInfo.Id .. "Page"
-    page.Size = UDim2.new(1, -20, 1, -20)
-    page.Position = UDim2.new(0, 10, 0, 10)
-    page.BackgroundTransparency = 1
-    page.BorderSizePixel = 0
-    page.ScrollBarThickness = 5
-    page.ScrollBarImageColor3 = Color3.fromRGB(56, 189, 248)
-    page.Visible = (tabInfo.Id == "Visuals")
-    page.AutomaticCanvasSize = Enum.AutomaticSize.Y
-    page.CanvasSize = UDim2.new(0, 0, 0, 0)
-    page.ZIndex = 12
-    page.Parent = ContentArea
-    
-    local pageLayout = Instance.new("UIListLayout")
-    pageLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    pageLayout.Padding = UDim.new(0, 8)
-    pageLayout.Parent = page
-    
-    TabFrames[tabInfo.Id] = page
-    TabButtons[tabInfo.Id] = tabBtn
-    
-    local function SelectTab()
-        for id, f in pairs(TabFrames) do
-            f.Visible = (id == tabInfo.Id)
-            TabButtons[id].BackgroundColor3 = (id == tabInfo.Id) and Color3.fromRGB(14, 165, 233) or Color3.fromRGB(30, 41, 59)
-            TabButtons[id].BackgroundTransparency = (id == tabInfo.Id) and 0.45 or 0.85
-        end
-    end
-    tabBtn.Activated:Connect(SelectTab)
-end
-
--- Debounced Toggle Component (Full-Card Hitbox at ZIndex 50)
-local function CreateToggle(parent, title, desc, defaultVal, callback)
-    local card = Instance.new("Frame")
-    card.Size = UDim2.new(1, 0, 0, 52)
-    card.BackgroundColor3 = defaultVal and Color3.fromRGB(16, 185, 129) or Color3.fromRGB(20, 30, 48)
-    card.BackgroundTransparency = defaultVal and 0.70 or 0.85
-    card.BorderSizePixel = 0
-    card.ZIndex = 14
-    card.Parent = parent
-    
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 10)
-    corner.Parent = card
-    
-    local stroke = Instance.new("UIStroke")
-    stroke.Color = defaultVal and Color3.fromRGB(34, 197, 94) or Color3.fromRGB(100, 116, 139)
-    stroke.Thickness = defaultVal and 1.8 or 1
-    stroke.Transparency = defaultVal and 0.1 or 0.65
-    stroke.Parent = card
-    
-    local titleLbl = Instance.new("TextLabel")
-    titleLbl.Size = UDim2.new(1, -70, 0, 22)
-    titleLbl.Position = UDim2.new(0, 14, 0, 7)
-    titleLbl.BackgroundTransparency = 1
-    titleLbl.Text = title
-    titleLbl.TextColor3 = Color3.fromRGB(248, 250, 252)
-    titleLbl.Font = Enum.Font.GothamBold
-    titleLbl.TextSize = 13
-    titleLbl.TextXAlignment = Enum.TextXAlignment.Left
-    titleLbl.ZIndex = 15
-    titleLbl.Active = false
-    titleLbl.Parent = card
-    
-    local descLbl = Instance.new("TextLabel")
-    descLbl.Size = UDim2.new(1, -70, 0, 16)
-    descLbl.Position = UDim2.new(0, 14, 0, 28)
-    descLbl.BackgroundTransparency = 1
-    descLbl.Text = desc
-    descLbl.TextColor3 = Color3.fromRGB(148, 163, 184)
-    descLbl.Font = Enum.Font.Gotham
-    descLbl.TextSize = 11
-    descLbl.TextXAlignment = Enum.TextXAlignment.Left
-    descLbl.ZIndex = 15
-    descLbl.Active = false
-    descLbl.Parent = card
-    
-    local pillSwitch = Instance.new("Frame")
-    pillSwitch.Size = UDim2.fromOffset(46, 24)
-    pillSwitch.Position = UDim2.new(1, -58, 0.5, -12)
-    pillSwitch.BackgroundColor3 = defaultVal and Color3.fromRGB(34, 197, 94) or Color3.fromRGB(51, 65, 85)
-    pillSwitch.BackgroundTransparency = 0.2
-    pillSwitch.ZIndex = 16
-    pillSwitch.Active = false
-    pillSwitch.Parent = card
-    
-    local pillCorner = Instance.new("UICorner")
-    pillCorner.CornerRadius = UDim.new(1, 0)
-    pillCorner.Parent = pillSwitch
-    
-    local indicator = Instance.new("Frame")
-    indicator.Size = UDim2.fromOffset(18, 18)
-    indicator.Position = defaultVal and UDim2.new(1, -21, 0.5, -9) or UDim2.new(0, 3, 0.5, -9)
-    indicator.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    indicator.ZIndex = 17
-    indicator.Active = false
-    indicator.Parent = pillSwitch
-    
-    local indCorner = Instance.new("UICorner")
-    indCorner.CornerRadius = UDim.new(1, 0)
-    indCorner.Parent = indicator
-    
-    local clickHitbox = Instance.new("TextButton")
-    clickHitbox.Name = "ClickHitbox"
-    clickHitbox.Size = UDim2.fromScale(1, 1)
-    clickHitbox.Position = UDim2.fromScale(0, 0)
-    clickHitbox.BackgroundTransparency = 1
-    clickHitbox.Text = ""
-    clickHitbox.ZIndex = 50
-    clickHitbox.Active = true
-    clickHitbox.Selectable = false
-    clickHitbox.AutoButtonColor = false
-    clickHitbox.Parent = card
-    
-    local state = defaultVal
-    local lastClickTime = 0
-    local function ToggleState()
-        local now = os.clock()
-        if (now - lastClickTime) < 0.25 then return end
-        lastClickTime = now
-        
-        state = not state
-        local targetPos = state and UDim2.new(1, -21, 0.5, -9) or UDim2.new(0, 3, 0.5, -9)
-        local targetSwitchColor = state and Color3.fromRGB(34, 197, 94) or Color3.fromRGB(51, 65, 85)
-        local targetStrokeColor = state and Color3.fromRGB(34, 197, 94) or Color3.fromRGB(100, 116, 139)
-        local targetStrokeTrans = state and 0.1 or 0.65
-        local targetCardColor = state and Color3.fromRGB(16, 185, 129) or Color3.fromRGB(20, 30, 48)
-        local targetCardTrans = state and 0.70 or 0.85
-        
-        TweenService:Create(indicator, TweenInfo.new(0.18), {Position = targetPos}):Play()
-        TweenService:Create(pillSwitch, TweenInfo.new(0.18), {BackgroundColor3 = targetSwitchColor}):Play()
-        TweenService:Create(stroke, TweenInfo.new(0.18), {Color = targetStrokeColor, Transparency = targetStrokeTrans}):Play()
-        TweenService:Create(card, TweenInfo.new(0.18), {BackgroundColor3 = targetCardColor, BackgroundTransparency = targetCardTrans}):Play()
-        callback(state)
-    end
-    clickHitbox.Activated:Connect(ToggleState)
-end
-
--- Slider Component
-local function CreateSlider(parent, title, minVal, maxVal, defaultVal, callback)
-    local card = Instance.new("Frame")
-    card.Size = UDim2.new(1, 0, 0, 60)
-    card.BackgroundColor3 = Color3.fromRGB(20, 30, 48)
-    card.BackgroundTransparency = 0.85
-    card.BorderSizePixel = 0
-    card.ZIndex = 14
-    card.Parent = parent
-    
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 10)
-    corner.Parent = card
-    
-    local stroke = Instance.new("UIStroke")
-    stroke.Color = Color3.fromRGB(100, 116, 139)
-    stroke.Thickness = 1
-    stroke.Transparency = 0.65
-    stroke.Parent = card
-    
-    local titleLbl = Instance.new("TextLabel")
-    titleLbl.Size = UDim2.new(0.7, 0, 0, 20)
-    titleLbl.Position = UDim2.new(0, 14, 0, 8)
-    titleLbl.BackgroundTransparency = 1
-    titleLbl.Text = title
-    titleLbl.TextColor3 = Color3.fromRGB(248, 250, 252)
-    titleLbl.Font = Enum.Font.GothamBold
-    titleLbl.TextSize = 13
-    titleLbl.TextXAlignment = Enum.TextXAlignment.Left
-    titleLbl.ZIndex = 15
-    titleLbl.Active = false
-    titleLbl.Parent = card
-    
-    local valLbl = Instance.new("TextLabel")
-    valLbl.Size = UDim2.new(0.3, -28, 0, 20)
-    valLbl.Position = UDim2.new(0.7, 0, 0, 8)
-    valLbl.BackgroundTransparency = 1
-    valLbl.Text = tostring(defaultVal)
-    valLbl.TextColor3 = Color3.fromRGB(56, 189, 248)
-    valLbl.Font = Enum.Font.GothamBold
-    valLbl.TextSize = 13
-    valLbl.TextXAlignment = Enum.TextXAlignment.Right
-    valLbl.ZIndex = 15
-    valLbl.Active = false
-    valLbl.Parent = card
-    
-    local track = Instance.new("Frame")
-    track.Size = UDim2.new(1, -28, 0, 12)
-    track.Position = UDim2.new(0, 14, 0, 36)
-    track.BackgroundColor3 = Color3.fromRGB(51, 65, 85)
-    track.BackgroundTransparency = 0.6
-    track.BorderSizePixel = 0
-    track.ZIndex = 15
-    track.Parent = card
-    
-    local trackCorner = Instance.new("UICorner")
-    trackCorner.CornerRadius = UDim.new(1, 0)
-    trackCorner.Parent = track
-    
-    local fillRatio = math.clamp((defaultVal - minVal) / (maxVal - minVal), 0, 1)
-    local fill = Instance.new("Frame")
-    fill.Size = UDim2.new(fillRatio, 0, 1, 0)
-    fill.BackgroundColor3 = Color3.fromRGB(14, 165, 233)
-    fill.BorderSizePixel = 0
-    fill.ZIndex = 16
-    fill.Parent = track
-    
-    local fillCorner = Instance.new("UICorner")
-    fillCorner.CornerRadius = UDim.new(1, 0)
-    fillCorner.Parent = fill
-    
-    local knob = Instance.new("Frame")
-    knob.Size = UDim2.fromOffset(18, 18)
-    knob.Position = UDim2.new(1, -9, 0.5, -9)
-    knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    knob.ZIndex = 17
-    knob.Parent = fill
-    
-    local knobCorner = Instance.new("UICorner")
-    knobCorner.CornerRadius = UDim.new(1, 0)
-    knobCorner.Parent = knob
-    
-    local sliderOverlay = Instance.new("TextButton")
-    sliderOverlay.Size = UDim2.new(1, 0, 0, 24)
-    sliderOverlay.Position = UDim2.new(0, 0, 0.5, -12)
-    sliderOverlay.BackgroundTransparency = 1
-    sliderOverlay.Text = ""
-    sliderOverlay.ZIndex = 50
-    sliderOverlay.Active = true
-    sliderOverlay.Parent = track
-    
-    local sliding = false
-    local function UpdateFromInput(input)
-        local mouseX = input.Position.X
-        local trackX = track.AbsolutePosition.X
-        local trackWidth = track.AbsoluteSize.X
-        local pct = math.clamp((mouseX - trackX) / trackWidth, 0, 1)
-        local calculatedVal = math.floor(minVal + (maxVal - minVal) * pct)
-        fill.Size = UDim2.new(pct, 0, 1, 0)
-        valLbl.Text = tostring(calculatedVal)
-        callback(calculatedVal)
-    end
-    
-    sliderOverlay.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            sliding = true
-            UpdateFromInput(input)
-        end
-    end)
-    UserInputService.InputChanged:Connect(function(input)
-        if sliding and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            UpdateFromInput(input)
-        end
-    end)
-    UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            sliding = false
-        end
-    end)
-end
-
--- ==========================================
--- TAB 1: VISUALS
--- ==========================================
-local VisualsPage = TabFrames["Visuals"]
-CreateToggle(VisualsPage, "Aberrant Killer ESP", "Chams & distance tracker for main AI killer (Seeker)", Config.AberrantESP, function(val) Config.AberrantESP = val end)
-CreateToggle(VisualsPage, "Adversaries ESP", "Highlights secondary cohort killers in bright orange", Config.AdversaryESP, function(val) Config.AdversaryESP = val end)
-CreateToggle(VisualsPage, "Survivors ESP", "Highlights survivors & teammates with health info", Config.SurvivorESP, function(val) Config.SurvivorESP = val end)
-CreateToggle(VisualsPage, "Aberrant Tracers", "Draws direct direction snapline to the nearest killer", Config.Tracers, function(val) Config.Tracers = val end)
-CreateToggle(VisualsPage, "Status Billboards", "Overhead billboard with exact distance & health tag", Config.ESPBoxes, function(val)
-    Config.ESPBoxes = val
-    if not val then
-        for _, folderName in ipairs({"Entities", "Survivors"}) do
-            local f = workspace:FindFirstChild(folderName)
-            if f then
-                for _, char in ipairs(f:GetChildren()) do
-                    local bb = char:FindFirstChild("VibeStatusBillboard", true)
-                    if bb then bb:Destroy() end
-                end
-            end
-        end
-    end
-end)
-
--- ==========================================
--- TAB 2: MOVEMENT
--- ==========================================
-local MovePage = TabFrames["Movement"]
-CreateToggle(MovePage, "WalkSpeed Boost", "Overrides movement speed without tripping resets", Config.SpeedEnabled, function(val)
-    Config.SpeedEnabled = val
-    if not val and LocalPlayer.Character then
-        local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-        if hum then hum.WalkSpeed = 30 end
-    end
-end)
-CreateSlider(MovePage, "WalkSpeed Multiplier", 30, 120, Config.SpeedValue, function(val)
-    Config.SpeedValue = val
-    if Config.SpeedEnabled and LocalPlayer.Character then
-        local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-        if hum then hum.WalkSpeed = val end
-    end
-end)
-CreateToggle(MovePage, "Jump Boost", "Increases jump power & vertical leap height", Config.JumpEnabled, function(val)
-    Config.JumpEnabled = val
-    if not val and LocalPlayer.Character then
-        local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-        if hum then hum.UseJumpPower = false; hum.JumpHeight = 7.2 end
-    end
-end)
-CreateSlider(MovePage, "Jump Power Level", 50, 160, Config.JumpValue, function(val)
-    Config.JumpValue = val
-    if Config.JumpEnabled and LocalPlayer.Character then
-        local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-        if hum then hum.UseJumpPower = true; hum.JumpPower = val end
-    end
-end)
-CreateToggle(MovePage, "Infinite Jump", "Allows jumping continuously mid-air by holding Space", Config.InfiniteJump, function(val) Config.InfiniteJump = val end)
-CreateToggle(MovePage, "Noclip", "Walk through walls, trees, fences & invisible map barriers", Config.Noclip, function(val) Config.Noclip = val end)
-CreateToggle(MovePage, "Flight Mode", "Fly freely through the map with WASD + Space/Shift", Config.FlyEnabled, function(val) Config.FlyEnabled = val end)
-CreateSlider(MovePage, "Flight Speed", 20, 120, Config.FlySpeed, function(val) Config.FlySpeed = val end)
-
--- ==========================================
--- TAB 3: MATCH RADAR
--- ==========================================
-local RadarPage = TabFrames["Radar"]
-local RadarOverview = Instance.new("Frame")
-RadarOverview.Size = UDim2.new(1, 0, 0, 100)
-RadarOverview.BackgroundColor3 = Color3.fromRGB(24, 34, 53)
-RadarOverview.BackgroundTransparency = 0.82
-RadarOverview.BorderSizePixel = 0
-RadarOverview.ZIndex = 14
-RadarOverview.Parent = RadarPage
-local RO_Corner = Instance.new("UICorner"); RO_Corner.CornerRadius = UDim.new(0, 10); RO_Corner.Parent = RadarOverview
-local RO_Stroke = Instance.new("UIStroke"); RO_Stroke.Color = Color3.fromRGB(56, 189, 248); RO_Stroke.Thickness = 1.2; RO_Stroke.Transparency = 0.65; RO_Stroke.Parent = RadarOverview
-local RO_Title = Instance.new("TextLabel"); RO_Title.Size = UDim2.new(1, -20, 0, 20); RO_Title.Position = UDim2.new(0, 12, 0, 6); RO_Title.BackgroundTransparency = 1; RO_Title.Text = "📡 LIVE MATCH TELEMETRY OVERVIEW"; RO_Title.TextColor3 = Color3.fromRGB(56, 189, 248); RO_Title.Font = Enum.Font.GothamBold; RO_Title.TextSize = 12; RO_Title.TextXAlignment = Enum.TextXAlignment.Left; RO_Title.ZIndex = 15; RO_Title.Parent = RadarOverview
-local RO_Body = Instance.new("TextLabel"); RO_Body.Name = "TelemetryText"; RO_Body.Size = UDim2.new(1, -24, 0, 68); RO_Body.Position = UDim2.new(0, 12, 0, 26); RO_Body.BackgroundTransparency = 1; RO_Body.Text = "Phase: Scanning...\nMap: Reading...\nAlive Survivors: 0 | Killers: 0"; RO_Body.TextColor3 = Color3.fromRGB(226, 232, 240); RO_Body.Font = Enum.Font.GothamMedium; RO_Body.TextSize = 12; RO_Body.TextXAlignment = Enum.TextXAlignment.Left; RO_Body.TextYAlignment = Enum.TextYAlignment.Top; RO_Body.ZIndex = 15; RO_Body.Parent = RadarOverview
-
-CreateToggle(RadarPage, "Killer Danger Warning", "Displays flashing screen alert when killer enters danger radius", Config.ProximityAlert, function(val)
-    Config.ProximityAlert = val
-    if not val then DangerBanner.Visible = false end
-end)
-CreateSlider(RadarPage, "Danger Proximity Radius (Studs)", 30, 150, Config.ProximityDist, function(val) Config.ProximityDist = val end)
-
-local RosterCard = Instance.new("Frame"); RosterCard.Size = UDim2.new(1, 0, 0, 130); RosterCard.BackgroundColor3 = Color3.fromRGB(24, 34, 53); RosterCard.BackgroundTransparency = 0.82; RosterCard.BorderSizePixel = 0; RosterCard.ZIndex = 14; RosterCard.Parent = RadarPage
-local RosterCorner = Instance.new("UICorner"); RosterCorner.CornerRadius = UDim.new(0, 10); RosterCorner.Parent = RosterCard
-local RosterStroke = Instance.new("UIStroke"); RosterStroke.Color = Color3.fromRGB(34, 197, 94); RosterStroke.Thickness = 1.2; RosterStroke.Transparency = 0.65; RosterStroke.Parent = RosterCard
-local RosterTitle = Instance.new("TextLabel"); RosterTitle.Size = UDim2.new(1, -20, 0, 20); RosterTitle.Position = UDim2.new(0, 12, 0, 6); RosterTitle.BackgroundTransparency = 1; RosterTitle.Text = "👥 SURVIVORS & HEALTH MONITOR"; RosterTitle.TextColor3 = Color3.fromRGB(74, 222, 128); RosterTitle.Font = Enum.Font.GothamBold; RosterTitle.TextSize = 12; RosterTitle.TextXAlignment = Enum.TextXAlignment.Left; RosterTitle.ZIndex = 15; RosterTitle.Parent = RosterCard
-local RosterScroller = Instance.new("ScrollingFrame"); RosterScroller.Size = UDim2.new(1, -24, 0, 96); RosterScroller.Position = UDim2.new(0, 12, 0, 28); RosterScroller.BackgroundTransparency = 1; RosterScroller.BorderSizePixel = 0; RosterScroller.ScrollBarThickness = 3; RosterScroller.ScrollBarImageColor3 = Color3.fromRGB(34, 197, 94); RosterScroller.AutomaticCanvasSize = Enum.AutomaticSize.Y; RosterScroller.ZIndex = 15; RosterScroller.Parent = RosterCard
-local RosterLayout = Instance.new("UIListLayout"); RosterLayout.SortOrder = Enum.SortOrder.LayoutOrder; RosterLayout.Padding = UDim.new(0, 4); RosterLayout.Parent = RosterScroller
-
-local ThreatCard = Instance.new("Frame"); ThreatCard.Size = UDim2.new(1, 0, 0, 80); ThreatCard.BackgroundColor3 = Color3.fromRGB(24, 34, 53); ThreatCard.BackgroundTransparency = 0.82; ThreatCard.BorderSizePixel = 0; ThreatCard.ZIndex = 14; ThreatCard.Parent = RadarPage
-local ThreatCorner = Instance.new("UICorner"); ThreatCorner.CornerRadius = UDim.new(0, 10); ThreatCorner.Parent = ThreatCard
-local ThreatStroke = Instance.new("UIStroke"); ThreatStroke.Color = Color3.fromRGB(239, 68, 68); ThreatStroke.Thickness = 1.2; ThreatStroke.Transparency = 0.65; ThreatStroke.Parent = ThreatCard
-local ThreatTitle = Instance.new("TextLabel"); ThreatTitle.Size = UDim2.new(1, -20, 0, 20); ThreatTitle.Position = UDim2.new(0, 12, 0, 6); ThreatTitle.BackgroundTransparency = 1; ThreatTitle.Text = "💀 ACTIVE KILLERS & THREAT RADAR"; ThreatTitle.TextColor3 = Color3.fromRGB(248, 113, 113); ThreatTitle.Font = Enum.Font.GothamBold; ThreatTitle.TextSize = 12; ThreatTitle.TextXAlignment = Enum.TextXAlignment.Left; ThreatTitle.ZIndex = 15; ThreatTitle.Parent = ThreatCard
-local ThreatBody = Instance.new("TextLabel"); ThreatBody.Size = UDim2.new(1, -24, 0, 50); ThreatBody.Position = UDim2.new(0, 12, 0, 26); ThreatBody.BackgroundTransparency = 1; ThreatBody.Text = "Scanning active killer threats..."; ThreatBody.TextColor3 = Color3.fromRGB(241, 245, 249); ThreatBody.Font = Enum.Font.GothamMedium; ThreatBody.TextSize = 11; ThreatBody.TextXAlignment = Enum.TextXAlignment.Left; ThreatBody.TextYAlignment = Enum.TextYAlignment.Top; ThreatBody.ZIndex = 15; ThreatBody.Parent = ThreatCard
-
-CreateToggle(RadarPage, "Remove Map Boundaries", "Disables invisible barriers so radar navigation is never blocked", Config.RemoveBarriers, function(val)
-    Config.RemoveBarriers = val
-    local map = workspace:FindFirstChild("GameMap")
-    if map then
-        for _, folderName in ipairs({"MapBarriers_Invisible", "MapBarriers_True"}) do
-            local folder = map:FindFirstChild(folderName)
-            if folder then
-                for _, barrier in ipairs(folder:GetChildren()) do
-                    if barrier:IsA("BasePart") then barrier.CanCollide = not val end
-                end
-            end
-        end
-    end
-end)
-
--- ==========================================
--- TAB 4: AMBIENCE & FX
--- ==========================================
-local AmbiencePage = TabFrames["Ambience"]
-CreateToggle(AmbiencePage, "Fullbright", "Removes shadows & darkness, sets max bright ambient lighting", Config.Fullbright, function(val)
-    Config.Fullbright = val
-    if not val then
-        Lighting.Ambient = origLighting.Ambient
-        Lighting.OutdoorAmbient = origLighting.OutdoorAmbient
-        Lighting.Brightness = origLighting.Brightness
-        Lighting.ClockTime = origLighting.ClockTime
-    end
-end)
-CreateToggle(AmbiencePage, "Remove Fog & Hazes", "Completely clears distance fog, haze and murky atmosphere", Config.NoFog, function(val)
-    Config.NoFog = val
-    if val then
-        Lighting.FogEnd = 1e6
-        local atmo = Lighting:FindFirstChildOfClass("Atmosphere")
-        if atmo then atmo.Density = 0 end
-    else
-        Lighting.FogEnd = origLighting.FogEnd
-    end
-end)
-CreateToggle(AmbiencePage, "Anti-Screen FX", "Immunity to flashbangs, red hurt vignettes & blur overlays", Config.CleanScreenFX, function(val)
-    Config.CleanScreenFX = val
-    pcall(function()
-        local pgui = LocalPlayer:FindFirstChild("PlayerGui")
-        if pgui and pgui:FindFirstChild("PlayerGui") then
-            local pg = pgui.PlayerGui
-            if pg:FindFirstChild("Hurt_1") then pg.Hurt_1.Visible = not val end
-            if pg:FindFirstChild("Hurt_2") then pg.Hurt_2.Visible = not val end
-            if pg:FindFirstChild("ChaseVignette") then pg.ChaseVignette.Visible = not val end
-        end
-        local dof = Lighting:FindFirstChildOfClass("DepthOfFieldEffect")
-        if dof then dof.Enabled = not val end
-    end)
-end)
-CreateToggle(AmbiencePage, "Anti-Ragdoll Support", "Prevents character ragdolling & restores upright posture instantly", Config.AntiRagdoll, function(val)
-    Config.AntiRagdoll = val
-    if val and LocalPlayer.Character then
-        local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-        if hum then
-            hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
-            hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
-        end
-    end
-end)
-
--- ==========================================
--- TAB 5: KILLER'S HELPER (WITH 360 TARGET LOCK!)
--- ==========================================
-local CombatPage = TabFrames["Combat"]
-CreateToggle(CombatPage, "Target Survivors Only", "Locks onto SURVIVORS ONLY. Protects Aberrant & fellow Adversaries", true, function(val)
-    Config.TargetRole = val and "Survivors" or "Entities"
-end)
-CreateToggle(CombatPage, "Target Lock 360 (Aim Assist)", "360° lock! Steers camera towards closest target from ANY angle (Hold Right Click)", Config.TargetLock, function(val)
-    Config.TargetLock = val
-end)
-CreateToggle(CombatPage, "360° Acquisition Mode", "When enabled, acquires targets in a full 360° sphere around you (Ignores FOV)", Config.Lock360, function(val)
-    Config.Lock360 = val
-end)
-CreateSlider(CombatPage, "Lock Smoothness", 1, 15, Config.LockSmoothness, function(val) Config.LockSmoothness = val end)
-CreateToggle(CombatPage, "Show Targeting FOV Circle", "Draws visual acquisition circle in the middle of your screen", Config.ShowFOV, function(val) Config.ShowFOV = val end)
-CreateSlider(CombatPage, "Targeting FOV Radius", 50, 300, Config.FOVRadius, function(val) Config.FOVRadius = val end)
-CreateToggle(CombatPage, "Auto-Swing (Trigger Assist)", "Auto attacks when an enemy SURVIVOR enters reach (Never triggers on teammates)", Config.AutoSwing, function(val) Config.AutoSwing = val end)
-CreateSlider(CombatPage, "Attack Reach Distance (Studs)", 8, 30, Config.AttackRange, function(val) Config.AttackRange = val end)
-CreateToggle(CombatPage, "Target Face Assist (360 Look-At)", "Forces your character's body to face directly at the target survivor in 360°", Config.LookAtTarget, function(val) Config.LookAtTarget = val end)
-CreateToggle(CombatPage, "Survivor Path Prediction", "Projects yellow trajectory line showing where the survivor is running", Config.PathPrediction, function(val) Config.PathPrediction = val end)
-
-local TargetStatusCard = Instance.new("Frame"); TargetStatusCard.Size = UDim2.new(1, 0, 0, 52); TargetStatusCard.BackgroundColor3 = Color3.fromRGB(30, 41, 59); TargetStatusCard.BackgroundTransparency = 0.85; TargetStatusCard.BorderSizePixel = 0; TargetStatusCard.ZIndex = 14; TargetStatusCard.Parent = CombatPage
-local TSC_Corner = Instance.new("UICorner"); TSC_Corner.CornerRadius = UDim.new(0, 10); TSC_Corner.Parent = TargetStatusCard
-local TSC_Stroke = Instance.new("UIStroke"); TSC_Stroke.Color = Color3.fromRGB(239, 68, 68); TSC_Stroke.Thickness = 1; TSC_Stroke.Transparency = 0.65; TSC_Stroke.Parent = TargetStatusCard
-local TargetStatusLbl = Instance.new("TextLabel"); TargetStatusLbl.Name = "TargetStatusText"; TargetStatusLbl.Size = UDim2.new(1, -20, 1, 0); TargetStatusLbl.Position = UDim2.new(0, 12, 0, 0); TargetStatusLbl.BackgroundTransparency = 1; TargetStatusLbl.Text = "🎯 Locked Target: None [0m away]"; TargetStatusLbl.TextColor3 = Color3.fromRGB(248, 113, 113); TargetStatusLbl.Font = Enum.Font.GothamBold; TargetStatusLbl.TextSize = 12; TargetStatusLbl.TextXAlignment = Enum.TextXAlignment.Left; TargetStatusLbl.ZIndex = 15; TargetStatusLbl.Parent = TargetStatusCard
-
--- ==========================================
--- TAB 6: SURVIVOR'S HELPER
--- ==========================================
-local SurvPage = TabFrames["Survivor"]
-local HazardCard = Instance.new("Frame"); HazardCard.Size = UDim2.new(1, 0, 0, 75); HazardCard.BackgroundColor3 = Color3.fromRGB(24, 34, 53); HazardCard.BackgroundTransparency = 0.82; HazardCard.BorderSizePixel = 0; HazardCard.ZIndex = 14; HazardCard.Parent = SurvPage
-local HC_Corner = Instance.new("UICorner"); HC_Corner.CornerRadius = UDim.new(0, 10); HC_Corner.Parent = HazardCard
-local HC_Stroke = Instance.new("UIStroke"); HC_Stroke.Color = Color3.fromRGB(16, 185, 129); HC_Stroke.Thickness = 1.2; HC_Stroke.Transparency = 0.65; HC_Stroke.Parent = HazardCard
-local HC_Title = Instance.new("TextLabel"); HC_Title.Size = UDim2.new(1, -20, 0, 20); HC_Title.Position = UDim2.new(0, 12, 0, 6); HC_Title.BackgroundTransparency = 1; HC_Title.Text = "🛡️ KILLER PROXIMITY HAZARD METER"; HC_Title.TextColor3 = Color3.fromRGB(52, 211, 153); HC_Title.Font = Enum.Font.GothamBold; HC_Title.TextSize = 12; HC_Title.TextXAlignment = Enum.TextXAlignment.Left; HC_Title.ZIndex = 15; HC_Title.Parent = HazardCard
-local HC_Status = Instance.new("TextLabel"); HC_Status.Name = "HazardText"; HC_Status.Size = UDim2.new(1, -24, 0, 42); HC_Status.Position = UDim2.new(0, 12, 0, 28); HC_Status.BackgroundTransparency = 1; HC_Status.Text = "Nearest Killer: Scanning...\nSafety Zone: 🟢 SAFE (>80m)"; HC_Status.TextColor3 = Color3.fromRGB(241, 245, 249); HC_Status.Font = Enum.Font.GothamMedium; HC_Status.TextSize = 12; HC_Status.TextXAlignment = Enum.TextXAlignment.Left; HC_Status.ZIndex = 15; HC_Status.Parent = HazardCard
-
-CreateToggle(SurvPage, "Auto-Evade Speed Burst", "Instantly triggers speed burst when a killer gets dangerously close", Config.AutoEvade, function(val) Config.AutoEvade = val end)
-CreateSlider(SurvPage, "Evade Activation Range (Studs)", 15, 60, Config.EvadeDistance, function(val) Config.EvadeDistance = val end)
-CreateToggle(SurvPage, "Escape Direction Vector", "Draws green directional line pointing directly AWAY from the nearest killer", Config.EscapeVector, function(val) Config.EscapeVector = val end)
-CreateToggle(SurvPage, "Teammate Low-HP Alert", "Sounds/highlights alerts when any fellow survivor drops below 40% HP", Config.MedAlert, function(val) Config.MedAlert = val end)
-CreateToggle(SurvPage, "Anti-Stagger & Quick Recover", "Prevents slowdowns and staggers after taking damage", Config.AntiStagger, function(val) Config.AntiStagger = val end)
-
--- ==========================================
--- TAB 7: SETTINGS & UI
--- ==========================================
-local SetPage = TabFrames["Settings"]
-
-local WallCard = Instance.new("Frame")
-WallCard.Size = UDim2.new(1, 0, 0, 115)
-WallCard.BackgroundColor3 = Color3.fromRGB(20, 30, 48)
-WallCard.BackgroundTransparency = 0.85
-WallCard.BorderSizePixel = 0
-WallCard.ZIndex = 14
-WallCard.Parent = SetPage
-
-local WC_Corner = Instance.new("UICorner"); WC_Corner.CornerRadius = UDim.new(0, 10); WC_Corner.Parent = WallCard
-local WC_Stroke = Instance.new("UIStroke"); WC_Stroke.Color = Color3.fromRGB(56, 189, 248); WC_Stroke.Thickness = 1.2; WC_Stroke.Transparency = 0.65; WC_Stroke.Parent = WallCard
-local WC_Title = Instance.new("TextLabel"); WC_Title.Size = UDim2.new(1, -20, 0, 20); WC_Title.Position = UDim2.new(0, 12, 0, 6); WC_Title.BackgroundTransparency = 1; WC_Title.Text = "🖼️ CUSTOM WALLPAPERS (Direct Roblox CDN - No Files)"; WC_Title.TextColor3 = Color3.fromRGB(248, 250, 252); WC_Title.Font = Enum.Font.GothamBold; WC_Title.TextSize = 12; WC_Title.TextXAlignment = Enum.TextXAlignment.Left; WC_Title.ZIndex = 15; WC_Title.Parent = WallCard
-
-local Wallpapers = {
-    {Name = "🏖️ Beach", Url = "rbxthumb://type=Asset&id=5164275208&w=768&h=432"},
-    {Name = "🌅 Sunset", Url = "rbxthumb://type=Asset&id=3290440107&w=768&h=432"},
-    {Name = "🌊 Ocean", Url = "rbxthumb://type=Asset&id=77196399&w=768&h=432"},
-    {Name = "🌺 Coral", Url = "rbxthumb://type=Asset&id=1523101449&w=768&h=432"},
-    {Name = "🌲 Forest", Url = "rbxthumb://type=Asset&id=1310955863&w=768&h=432"},
-    {Name = "🏙️ City", Url = "rbxthumb://type=Asset&id=13013750843&w=768&h=432"}
-}
-
-for i, w in ipairs(Wallpapers) do
-    local col = (i - 1) % 3
-    local row = math.floor((i - 1) / 3)
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.fromOffset(145, 32)
-    btn.Position = UDim2.new(0, 12 + col * 155, 0, 32 + row * 38)
-    btn.BackgroundColor3 = Color3.fromRGB(15, 23, 42)
-    btn.BackgroundTransparency = 0.85
-    btn.Text = w.Name
-    btn.TextColor3 = Color3.fromRGB(241, 245, 249)
-    btn.Font = Enum.Font.GothamBold
-    btn.TextSize = 12
-    btn.ZIndex = 16
-    btn.Active = true
-    btn.Parent = WallCard
-    
-    local bCorner = Instance.new("UICorner"); bCorner.CornerRadius = UDim.new(0, 6); bCorner.Parent = btn
-    local bStroke = Instance.new("UIStroke"); bStroke.Color = Color3.fromRGB(71, 85, 105); bStroke.Transparency = 0.65; bStroke.Parent = btn
-    
-    btn.Activated:Connect(function()
-        Config.CurrentWallpaper = w.Url
-        BeachBG.Image = w.Url
-        BeachBG.ImageTransparency = Config.BGOpacity
-    end)
-end
-
-CreateSlider(SetPage, "Wallpaper Transparency (%)", 0, 90, 0, function(val)
-    Config.BGOpacity = val / 100
-    BeachBG.ImageTransparency = Config.BGOpacity
-end)
-
-local ThemeCard = Instance.new("Frame")
-ThemeCard.Size = UDim2.new(1, 0, 0, 75)
-ThemeCard.BackgroundColor3 = Color3.fromRGB(20, 30, 48)
-ThemeCard.BackgroundTransparency = 0.85
-ThemeCard.BorderSizePixel = 0
-ThemeCard.ZIndex = 14
-ThemeCard.Parent = SetPage
-
-local TC_Corner = Instance.new("UICorner"); TC_Corner.CornerRadius = UDim.new(0, 10); TC_Corner.Parent = ThemeCard
-local TC_Stroke = Instance.new("UIStroke"); TC_Stroke.Color = Color3.fromRGB(100, 116, 139); TC_Stroke.Thickness = 1; TC_Stroke.Transparency = 0.65; TC_Stroke.Parent = ThemeCard
-local TC_Title = Instance.new("TextLabel"); TC_Title.Size = UDim2.new(1, -20, 0, 20); TC_Title.Position = UDim2.new(0, 12, 0, 6); TC_Title.BackgroundTransparency = 1; TC_Title.Text = "🎨 ACCENT THEME PRESETS"; TC_Title.TextColor3 = Color3.fromRGB(248, 250, 252); TC_Title.Font = Enum.Font.GothamBold; TC_Title.TextSize = 12; TC_Title.TextXAlignment = Enum.TextXAlignment.Left; TC_Title.ZIndex = 15; TC_Title.Parent = ThemeCard
-
-local ThemeColors = {
-    {Name = "Ocean", Color = Color3.fromRGB(56, 189, 248)},
-    {Name = "Sunset", Color = Color3.fromRGB(245, 158, 11)},
-    {Name = "Coral", Color = Color3.fromRGB(244, 63, 94)},
-    {Name = "City", Color = Color3.fromRGB(168, 85, 247)}
-}
-for i, t in ipairs(ThemeColors) do
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.fromOffset(80, 28)
-    btn.Position = UDim2.new(0, 12 + (i - 1) * 90, 0, 34)
-    btn.BackgroundColor3 = t.Color
-    btn.BackgroundTransparency = 0.35
-    btn.Text = t.Name
-    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    btn.Font = Enum.Font.GothamBold
-    btn.TextSize = 11
-    btn.ZIndex = 16
-    btn.Active = true
-    btn.Parent = ThemeCard
-    
-    local bCorner = Instance.new("UICorner"); bCorner.CornerRadius = UDim.new(0, 6); bCorner.Parent = btn
-    
-    btn.Activated:Connect(function()
-        MainStroke.Color = t.Color
-        Subtitle.TextColor3 = t.Color
-        PillBtn.TextColor3 = t.Color
-        PillStroke.Color = t.Color
-    end)
-end
-
-CreateToggle(SetPage, "Show Floating Vibe Pill", "Displays small on-screen button to open/close menu", Config.FloatingPill, function(val)
-    Config.FloatingPill = val
-    PillBtn.Visible = val
-end)
-
-local UnloadCard = Instance.new("Frame")
-UnloadCard.Size = UDim2.new(1, 0, 0, 56)
-UnloadCard.BackgroundColor3 = Color3.fromRGB(20, 30, 48)
-UnloadCard.BackgroundTransparency = 0.85
-UnloadCard.BorderSizePixel = 0
-UnloadCard.ZIndex = 14
-UnloadCard.Parent = SetPage
-
-local UC_Corner = Instance.new("UICorner"); UC_Corner.CornerRadius = UDim.new(0, 10); UC_Corner.Parent = UnloadCard
-local UC_Stroke = Instance.new("UIStroke"); UC_Stroke.Color = Color3.fromRGB(239, 68, 68); UC_Stroke.Thickness = 1; UC_Stroke.Transparency = 0.65; UC_Stroke.Parent = UnloadCard
-
-local UnloadBtn = Instance.new("TextButton")
-UnloadBtn.Size = UDim2.new(1, -24, 0, 38)
-UnloadBtn.Position = UDim2.new(0, 12, 0.5, -19)
-UnloadBtn.BackgroundColor3 = Color3.fromRGB(220, 38, 38)
-UnloadBtn.BackgroundTransparency = 0.5
-UnloadBtn.Text = "🛑 Clean Unload (Destroy UI & Restore Defaults)"
-UnloadBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-UnloadBtn.Font = Enum.Font.GothamBold
-UnloadBtn.TextSize = 12
-UnloadBtn.ZIndex = 16
-UnloadBtn.Active = true
-UnloadBtn.Parent = UnloadCard
-
-local UB_Corner = Instance.new("UICorner"); UB_Corner.CornerRadius = UDim.new(0, 8); UB_Corner.Parent = UnloadBtn
-
-UnloadBtn.Activated:Connect(function()
+    -- Cleanup previous
     if getgenv().VibeBeachUI and typeof(getgenv().VibeBeachUI) == "Instance" then
         getgenv().VibeBeachUI:Destroy()
     end
     if getgenv().VibeBeachCleanups then
-        for _, c in ipairs(getgenv().VibeBeachCleanups) do pcall(function() c:Disconnect() end) end
+        for _, c in ipairs(getgenv().VibeBeachCleanups) do
+            pcall(function() c:Disconnect() end)
+        end
     end
-    if getgenv().VibeFlyCleanup then pcall(getgenv().VibeFlyCleanup) end
+    getgenv().VibeBeachCleanups = {}
+    
+    if getgenv().VibeFlyCleanup then
+        pcall(getgenv().VibeFlyCleanup)
+    end
     if getgenv().VibeDrawings then
-        for _, d in ipairs(getgenv().VibeDrawings) do pcall(function() d:Remove() end) end
+        for _, d in ipairs(getgenv().VibeDrawings) do
+            pcall(function() d:Remove() end)
+        end
     end
+    getgenv().VibeDrawings = {}
+    
     for _, folderName in ipairs({"Entities", "Survivors"}) do
         local f = workspace:FindFirstChild(folderName)
         if f then
@@ -978,346 +44,1718 @@ UnloadBtn.Activated:Connect(function()
             end
         end
     end
-    Lighting.Ambient = origLighting.Ambient
-    Lighting.OutdoorAmbient = origLighting.OutdoorAmbient
-    Lighting.Brightness = origLighting.Brightness
-    Lighting.ClockTime = origLighting.ClockTime
-    Lighting.FogEnd = origLighting.FogEnd
-    if LocalPlayer.Character then
-        local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-        if hum then
-            hum.WalkSpeed = 30
-            hum.UseJumpPower = false
-            hum.JumpHeight = 7.2
+    
+    local guiParent = (gethui and gethui()) or CoreGui or LocalPlayer:WaitForChild("PlayerGui")
+    
+    -- Master Configuration with deep customization options
+    local Config = {
+        -- Tab 1: Visuals
+        AberrantESP = false,
+        AdversaryESP = false,
+        SurvivorESP = false,
+        Tracers = false,
+        ESPBoxes = false,
+        -- Tab 2: Movement
+        SpeedEnabled = false,
+        SpeedValue = 50,
+        JumpEnabled = false,
+        JumpValue = 75,
+        InfiniteJump = false,
+        Noclip = false,
+        FlyEnabled = false,
+        FlySpeed = 50,
+        -- Tab 3: Match Radar
+        ProximityAlert = true,
+        ProximityDist = 60,
+        RemoveBarriers = false,
+        -- Tab 4: Ambience & FX
+        Fullbright = false,
+        NoFog = false,
+        CleanScreenFX = false,
+        AntiRagdoll = false,
+        -- Tab 5: Killer's Helper (Combat)
+        TargetRole = "Survivors",
+        TargetLock = false,
+        Lock360 = true,
+        LockSmoothness = 5,
+        ShowFOV = false,
+        FOVRadius = 150,
+        AttackRange = 18,
+        AutoSwing = false,
+        LookAtTarget = false,
+        PathPrediction = false,
+        -- Tab 6: Survivor's Helper
+        AutoEvade = false,
+        EvadeDistance = 30,
+        EscapeVector = false,
+        MedAlert = true,
+        AntiStagger = false,
+        -- Tab 7: Deep Customization & Settings
+        BGOpacity = 0,
+        ButtonOpacity = 0.85,
+        CurrentWallpaper = "https://cdn.discordapp.com/attachments/1554233622960283729/1564034198317043812/images.png?ex=6adfcbdb&is=6ade7a5b&hm=034ead046e9a6603437c7037d4816e8ee3527e4be69ecbf0aba03a85d1d80949&",
+        FloatingPill = true,
+        UIScaleValue = 100,
+        ToggleKey = Enum.KeyCode.RightControl,
+        KillerESPColor = Color3.fromRGB(239, 68, 68),
+        SurvivorESPColor = Color3.fromRGB(56, 189, 248),
+        AccentColor = Color3.fromRGB(56, 189, 248),
+        AccentR = 56,
+        AccentG = 189,
+        AccentB = 248
+    }
+    getgenv().VibeConfig = Config
+    
+    local origLighting = {
+        Ambient = Lighting.Ambient,
+        OutdoorAmbient = Lighting.OutdoorAmbient,
+        Brightness = Lighting.Brightness,
+        ClockTime = Lighting.ClockTime,
+        FogEnd = Lighting.FogEnd
+    }
+    
+    local bgFileCounter = 0
+    local lastSavedBg = nil
+    
+    local function LoadImageSource(uri)
+        if not uri or #uri == 0 then return "" end
+        uri = string.gsub(uri, "^%s*(.-)%s*$", "%1")
+        if string.sub(uri, 1, 11) == "rbxasset://" or string.sub(uri, 1, 12) == "rbxthumb://" or string.sub(uri, 1, 13) == "rbxassetid://" then
+            return uri
         end
-    end
-end)
-
--- ==========================================
--- DRAWINGS & CORE LOOPS
--- ==========================================
-local fovCircle = Drawing.new("Circle")
-fovCircle.Radius = Config.FOVRadius
-fovCircle.Filled = false
-fovCircle.Color = Color3.fromRGB(56, 189, 248)
-fovCircle.Thickness = 1.5
-fovCircle.Transparency = 0.8
-fovCircle.Visible = false
-table.insert(getgenv().VibeDrawings, fovCircle)
-
-local predLine = Drawing.new("Line")
-predLine.Color = Color3.fromRGB(250, 204, 21)
-predLine.Thickness = 2
-predLine.Transparency = 0.9
-predLine.Visible = false
-table.insert(getgenv().VibeDrawings, predLine)
-
-local escapeLine = Drawing.new("Line")
-escapeLine.Color = Color3.fromRGB(34, 197, 94)
-escapeLine.Thickness = 2.5
-escapeLine.Transparency = 1
-escapeLine.Visible = false
-table.insert(getgenv().VibeDrawings, escapeLine)
-
-local espHighlights = {}
-
-local function GetTargetsFolder(role)
-    if role == "Survivors" then
-        return workspace:FindFirstChild("Survivors")
-    elseif role == "Entities" then
-        return workspace:FindFirstChild("Entities")
-    end
-    return nil
-end
-
--- 360-Degree Target Finder
-local function GetClosestTarget(folder)
-    if not folder or not LocalPlayer.Character then return nil, math.huge end
-    local root = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if not root then return nil, math.huge end
-    local closest, minDist = nil, math.huge
-    for _, model in ipairs(folder:GetChildren()) do
-        if model:IsA("Model") and model ~= LocalPlayer.Character then
-            local hrp = model:FindFirstChild("HumanoidRootPart")
-            local hum = model:FindFirstChildOfClass("Humanoid")
-            if hrp and hum and hum.Health > 0 then
-                local dist = (hrp.Position - root.Position).Magnitude
-                if dist < minDist then
-                    minDist = dist
-                    closest = model
+        local numOnly = string.match(uri, "^%d+$")
+        if numOnly then
+            return "rbxthumb://type=Asset&id=" .. numOnly .. "&w=768&h=432"
+        end
+        if string.find(uri, "roblox.com") then
+            local extracted = string.match(uri, "(%d+)")
+            if extracted then
+                return "rbxthumb://type=Asset&id=" .. extracted .. "&w=768&h=432"
+            end
+        end
+        if string.sub(uri, 1, 7) == "http://" or string.sub(uri, 1, 8) == "https://" then
+            local customAssetFunc = getcustomasset or getsynasset
+            if not customAssetFunc then return uri end
+            
+            bgFileCounter = bgFileCounter + 1
+            local fileName = "vibecoded_bg_" .. tostring(os.time()) .. "_" .. tostring(bgFileCounter) .. ".png"
+            local body = nil
+            local ok, res = pcall(function() return game:HttpGet(uri) end)
+            if ok and res and #res > 50 then
+                body = res
+            else
+                local req = (syn and syn.request) or request or http_request
+                if req then
+                    pcall(function()
+                        local response = req({Url = uri, Method = "GET"})
+                        if response and response.StatusCode == 200 and response.Body and #response.Body > 50 then
+                            body = response.Body
+                        end
+                    end)
                 end
+            end
+            if body and #body > 50 then
+                pcall(function()
+                    if writefile then writefile(fileName, body) end
+                end)
+                local asset = customAssetFunc(fileName)
+                if lastSavedBg and isfile and isfile(lastSavedBg) and delfile then
+                    pcall(function() delfile(lastSavedBg) end)
+                end
+                lastSavedBg = fileName
+                return asset
+            end
+            return nil
+        end
+        return uri
+    end
+    
+    local ScreenGui = Instance.new("ScreenGui")
+    ScreenGui.Name = "VibecodedBestEverAI"
+    ScreenGui.ResetOnSpawn = false
+    ScreenGui.DisplayOrder = 999
+    ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    ScreenGui.Parent = guiParent
+    getgenv().VibeBeachUI = ScreenGui
+    
+    -- Floating Beach Pill
+    local PillBtn = Instance.new("TextButton")
+    PillBtn.Name = "VibeFloatingPill"
+    PillBtn.Size = UDim2.fromOffset(105, 34)
+    PillBtn.Position = UDim2.new(0, 16, 0.5, -17)
+    PillBtn.BackgroundColor3 = Color3.fromRGB(15, 23, 42)
+    PillBtn.BackgroundTransparency = 0.25
+    PillBtn.Text = "🏝️ Vibe Menu"
+    PillBtn.TextColor3 = Config.AccentColor
+    PillBtn.Font = Enum.Font.GothamBold
+    PillBtn.TextSize = 13
+    PillBtn.ZIndex = 200
+    PillBtn.Parent = ScreenGui
+    
+    local PillCorner = Instance.new("UICorner")
+    PillCorner.CornerRadius = UDim.new(1, 0)
+    PillCorner.Parent = PillBtn
+    
+    local PillStroke = Instance.new("UIStroke")
+    PillStroke.Color = Config.AccentColor
+    PillStroke.Thickness = 1.5
+    PillStroke.Parent = PillBtn
+    
+    -- Danger Banner HUD
+    local DangerBanner = Instance.new("Frame")
+    DangerBanner.Name = "DangerBanner"
+    DangerBanner.Size = UDim2.fromOffset(360, 42)
+    DangerBanner.Position = UDim2.new(0.5, -180, 0, 18)
+    DangerBanner.BackgroundColor3 = Color3.fromRGB(153, 27, 27)
+    DangerBanner.BackgroundTransparency = 0.2
+    DangerBanner.BorderSizePixel = 0
+    DangerBanner.Visible = false
+    DangerBanner.ZIndex = 150
+    DangerBanner.Parent = ScreenGui
+    
+    local DangerCorner = Instance.new("UICorner")
+    DangerCorner.CornerRadius = UDim.new(0, 10)
+    DangerCorner.Parent = DangerBanner
+    
+    local DangerStroke = Instance.new("UIStroke")
+    DangerStroke.Color = Color3.fromRGB(248, 113, 113)
+    DangerStroke.Thickness = 1.5
+    DangerStroke.Parent = DangerBanner
+    
+    local DangerText = Instance.new("TextLabel")
+    DangerText.Size = UDim2.fromScale(1, 1)
+    DangerText.BackgroundTransparency = 1
+    DangerText.Text = "⚠️ DANGER: OPPONENT APPROACHING"
+    DangerText.TextColor3 = Color3.fromRGB(254, 226, 226)
+    DangerText.Font = Enum.Font.GothamBold
+    DangerText.TextSize = 13
+    DangerText.ZIndex = 151
+    DangerText.Parent = DangerBanner
+    
+    -- Main Window Frame
+    local MainFrame = Instance.new("Frame")
+    MainFrame.Name = "MainFrame"
+    MainFrame.Size = UDim2.fromOffset(700, 470)
+    MainFrame.Position = UDim2.new(0.5, -350, 0.5, -235)
+    MainFrame.BackgroundColor3 = Color3.fromRGB(10, 15, 25)
+    MainFrame.BorderSizePixel = 0
+    MainFrame.ClipsDescendants = true
+    MainFrame.Active = true
+    MainFrame.Parent = ScreenGui
+    
+    local MainScale = Instance.new("UIScale")
+    MainScale.Name = "MainScale"
+    MainScale.Scale = Config.UIScaleValue / 100
+    MainScale.Parent = MainFrame
+    
+    local function ToggleMenu()
+        MainFrame.Visible = not MainFrame.Visible
+    end
+    PillBtn.Activated:Connect(ToggleMenu)
+    
+    local keybindConn = UserInputService.InputBegan:Connect(function(input, gpe)
+        if not gpe and input.KeyCode == Config.ToggleKey then
+            ToggleMenu()
+        end
+    end)
+    table.insert(getgenv().VibeBeachCleanups, keybindConn)
+    
+    local MainCorner = Instance.new("UICorner")
+    MainCorner.CornerRadius = UDim.new(0, 16)
+    MainCorner.Parent = MainFrame
+    
+    local MainStroke = Instance.new("UIStroke")
+    MainStroke.Name = "AccentStroke"
+    MainStroke.Color = Config.AccentColor
+    MainStroke.Thickness = 1.8
+    MainStroke.Transparency = 0.1
+    MainStroke.Parent = MainFrame
+    
+    -- Dynamic Wallpaper
+    local BeachBG = Instance.new("ImageLabel")
+    BeachBG.Name = "BeachBackground"
+    BeachBG.Size = UDim2.fromScale(1, 1)
+    BeachBG.Position = UDim2.fromScale(0, 0)
+    BeachBG.BackgroundTransparency = 1
+    BeachBG.Image = ""
+    BeachBG.ScaleType = Enum.ScaleType.Crop
+    BeachBG.ImageTransparency = Config.BGOpacity
+    BeachBG.ZIndex = 1
+    BeachBG.Parent = MainFrame
+    
+    task.spawn(function()
+        local resolved = LoadImageSource(Config.CurrentWallpaper)
+        if resolved and BeachBG and BeachBG.Parent then
+            BeachBG.Image = resolved
+        end
+    end)
+    
+    -- TopBar
+    local TopBar = Instance.new("Frame")
+    TopBar.Name = "TopBar"
+    TopBar.Size = UDim2.new(1, 0, 0, 52)
+    TopBar.BackgroundColor3 = Color3.fromRGB(15, 23, 42)
+    TopBar.BackgroundTransparency = 0.60
+    TopBar.BorderSizePixel = 0
+    TopBar.ZIndex = 10
+    TopBar.Active = true
+    TopBar.Parent = MainFrame
+    
+    local MenuIcon = Instance.new("ImageLabel")
+    MenuIcon.Name = "MenuIcon"
+    MenuIcon.Size = UDim2.new(0, 32, 0, 32)
+    MenuIcon.Position = UDim2.new(0, 12, 0.5, -16)
+    MenuIcon.BackgroundTransparency = 1
+    MenuIcon.Image = "rbxassetid://104919049969988"
+    MenuIcon.ScaleType = Enum.ScaleType.Fit
+    MenuIcon.ZIndex = 12
+    MenuIcon.Parent = TopBar
+    
+    local TitleLabel = Instance.new("TextLabel")
+    TitleLabel.Name = "TitleLabel"
+    TitleLabel.Size = UDim2.new(0, 320, 1, 0)
+    TitleLabel.Position = UDim2.new(0, 52, 0, 0)
+    TitleLabel.BackgroundTransparency = 1
+    TitleLabel.Text = "Vibecoded with the best ever ai"
+    TitleLabel.TextColor3 = Color3.fromRGB(240, 249, 255)
+    TitleLabel.Font = Enum.Font.GothamBold
+    TitleLabel.TextSize = 16
+    TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    TitleLabel.ZIndex = 11
+    TitleLabel.Active = false
+    TitleLabel.Parent = TopBar
+    
+    local Subtitle = Instance.new("TextLabel")
+    Subtitle.Name = "Subtitle"
+    Subtitle.Size = UDim2.new(0, 140, 1, 0)
+    Subtitle.Position = UDim2.new(0, 375, 0, 0)
+    Subtitle.BackgroundTransparency = 1
+    Subtitle.Text = "• JOMA Suite"
+    Subtitle.TextColor3 = Config.AccentColor
+    Subtitle.Font = Enum.Font.GothamMedium
+    Subtitle.TextSize = 13
+    Subtitle.TextXAlignment = Enum.TextXAlignment.Left
+    Subtitle.ZIndex = 11
+    Subtitle.Active = false
+    Subtitle.Parent = TopBar
+    
+    local CloseBtn = Instance.new("TextButton")
+    CloseBtn.Name = "CloseBtn"
+    CloseBtn.Size = UDim2.fromOffset(32, 32)
+    CloseBtn.Position = UDim2.new(1, -44, 0.5, -16)
+    CloseBtn.BackgroundColor3 = Color3.fromRGB(239, 68, 68)
+    CloseBtn.BackgroundTransparency = 0.2
+    CloseBtn.Text = "✕"
+    CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    CloseBtn.Font = Enum.Font.GothamBold
+    CloseBtn.TextSize = 14
+    CloseBtn.ZIndex = 25
+    CloseBtn.Parent = TopBar
+    
+    local CloseCorner = Instance.new("UICorner")
+    CloseCorner.CornerRadius = UDim.new(0, 8)
+    CloseCorner.Parent = CloseBtn
+    CloseBtn.Activated:Connect(ToggleMenu)
+    
+    -- Smooth Dragging
+    local dragging = false
+    local dragStart, startPos
+    TopBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            local mx = input.Position.X
+            local my = input.Position.Y
+            local cx = CloseBtn.AbsolutePosition.X
+            local cy = CloseBtn.AbsolutePosition.Y
+            local cw = CloseBtn.AbsoluteSize.X
+            local ch = CloseBtn.AbsoluteSize.Y
+            if mx >= cx and mx <= cx + cw and my >= cy and my <= cy + ch then return end
+            dragging = true
+            dragStart = input.Position
+            startPos = MainFrame.Position
+        end
+    end)
+    
+    local dragMoveConn = UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local delta = input.Position - dragStart
+            MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+    table.insert(getgenv().VibeBeachCleanups, dragMoveConn)
+    
+    local dragEndConn = UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
+    table.insert(getgenv().VibeBeachCleanups, dragEndConn)
+    
+    -- Sidebar
+    local Sidebar = Instance.new("Frame")
+    Sidebar.Name = "Sidebar"
+    Sidebar.Size = UDim2.new(0, 180, 1, -52)
+    Sidebar.Position = UDim2.new(0, 0, 0, 52)
+    Sidebar.BackgroundColor3 = Color3.fromRGB(15, 23, 42)
+    Sidebar.BackgroundTransparency = 0.78
+    Sidebar.BorderSizePixel = 0
+    Sidebar.ZIndex = 10
+    Sidebar.Parent = MainFrame
+    
+    local SideLayout = Instance.new("UIListLayout")
+    SideLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    SideLayout.Padding = UDim.new(0, 5)
+    SideLayout.Parent = Sidebar
+    
+    local SidePadding = Instance.new("UIPadding")
+    SidePadding.PaddingTop = UDim.new(0, 8)
+    SidePadding.PaddingLeft = UDim.new(0, 8)
+    SidePadding.PaddingRight = UDim.new(0, 8)
+    SidePadding.Parent = Sidebar
+    
+    local ContentArea = Instance.new("Frame")
+    ContentArea.Name = "ContentArea"
+    ContentArea.Size = UDim2.new(1, -180, 1, -52)
+    ContentArea.Position = UDim2.new(0, 180, 0, 52)
+    ContentArea.BackgroundTransparency = 1
+    ContentArea.ZIndex = 10
+    ContentArea.Parent = MainFrame
+    
+    local Tabs = {
+        {Id = "Visuals", Name = "👁️ Visuals & ESP", Order = 1},
+        {Id = "Movement", Name = "⚡ Movement", Order = 2},
+        {Id = "Radar", Name = "🎯 Match Radar", Order = 3},
+        {Id = "Ambience", Name = "🌅 Ambience & FX", Order = 4},
+        {Id = "Combat", Name = "⚔️ Killer's Helper", Order = 5},
+        {Id = "Survivor", Name = "🛡️ Survivor's Helper", Order = 6},
+        {Id = "Settings", Name = "⚙️ Settings & UI", Order = 7}
+    }
+    
+    local TabFrames = {}
+    local TabButtons = {}
+    local allCards = {}
+    
+    for _, tabInfo in ipairs(Tabs) do
+        local tabBtn = Instance.new("TextButton")
+        tabBtn.Name = tabInfo.Id .. "TabBtn"
+        tabBtn.Size = UDim2.new(1, 0, 0, 36)
+        tabBtn.BackgroundColor3 = (tabInfo.Id == "Settings") and Config.AccentColor or Color3.fromRGB(30, 41, 59)
+        tabBtn.BackgroundTransparency = (tabInfo.Id == "Settings") and 0.45 or Config.ButtonOpacity
+        tabBtn.Text = tabInfo.Name
+        tabBtn.TextColor3 = Color3.fromRGB(241, 245, 249)
+        tabBtn.Font = Enum.Font.GothamMedium
+        tabBtn.TextSize = 12
+        tabBtn.LayoutOrder = tabInfo.Order
+        tabBtn.ZIndex = 12
+        tabBtn.Parent = Sidebar
+        
+        local tabCorner = Instance.new("UICorner")
+        tabCorner.CornerRadius = UDim.new(0, 8)
+        tabCorner.Parent = tabBtn
+        
+        local page = Instance.new("ScrollingFrame")
+        page.Name = tabInfo.Id .. "Page"
+        page.Size = UDim2.new(1, -20, 1, -20)
+        page.Position = UDim2.new(0, 10, 0, 10)
+        page.BackgroundTransparency = 1
+        page.BorderSizePixel = 0
+        page.ScrollBarThickness = 5
+        page.ScrollBarImageColor3 = Config.AccentColor
+        page.Visible = (tabInfo.Id == "Settings")
+        page.AutomaticCanvasSize = Enum.AutomaticSize.Y
+        page.CanvasSize = UDim2.new(0, 0, 0, 0)
+        page.ZIndex = 12
+        page.Parent = ContentArea
+        
+        local pageLayout = Instance.new("UIListLayout")
+        pageLayout.SortOrder = Enum.SortOrder.LayoutOrder
+        pageLayout.Padding = UDim.new(0, 8)
+        pageLayout.Parent = page
+        
+        TabFrames[tabInfo.Id] = page
+        TabButtons[tabInfo.Id] = tabBtn
+        
+        local function SelectTab()
+            for id, f in pairs(TabFrames) do
+                f.Visible = (id == tabInfo.Id)
+                TabButtons[id].BackgroundColor3 = (id == tabInfo.Id) and Config.AccentColor or Color3.fromRGB(30, 41, 59)
+                TabButtons[id].BackgroundTransparency = (id == tabInfo.Id) and 0.45 or Config.ButtonOpacity
+            end
+        end
+        tabBtn.Activated:Connect(SelectTab)
+    end
+    
+    local function ApplyGlobalAccent(col)
+        Config.AccentColor = col
+        MainStroke.Color = col
+        Subtitle.TextColor3 = col
+        PillBtn.TextColor3 = col
+        PillStroke.Color = col
+        for id, f in pairs(TabFrames) do
+            f.ScrollBarImageColor3 = col
+            if f.Visible then
+                TabButtons[id].BackgroundColor3 = col
             end
         end
     end
-    return closest, minDist
-end
-
--- Status Billboards Updater
-local activeBillboards = {}
-local function UpdateBillboards(folder, roleColor, isKiller)
-    if not folder then return end
-    local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    for _, char in ipairs(folder:GetChildren()) do
-        if char:IsA("Model") and char ~= LocalPlayer.Character then
-            local head = char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            if head and hum and hum.Health > 0 then
-                local bb = activeBillboards[char]
-                if Config.ESPBoxes then
-                    if not bb or bb.Parent ~= head then
+    
+    -- Component Creator: Toggle
+    local function CreateToggle(parent, title, desc, defaultVal, callback)
+        local card = Instance.new("Frame")
+        card.Size = UDim2.new(1, 0, 0, 52)
+        card.BackgroundColor3 = defaultVal and Color3.fromRGB(16, 185, 129) or Color3.fromRGB(20, 30, 48)
+        card.BackgroundTransparency = defaultVal and 0.70 or Config.ButtonOpacity
+        card.BorderSizePixel = 0
+        card.ZIndex = 14
+        card.Parent = parent
+        table.insert(allCards, card)
+        
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 10)
+        corner.Parent = card
+        
+        local stroke = Instance.new("UIStroke")
+        stroke.Color = defaultVal and Color3.fromRGB(34, 197, 94) or Color3.fromRGB(100, 116, 139)
+        stroke.Thickness = defaultVal and 1.8 or 1
+        stroke.Transparency = defaultVal and 0.1 or 0.65
+        stroke.Parent = card
+        
+        local titleLbl = Instance.new("TextLabel")
+        titleLbl.Size = UDim2.new(1, -70, 0, 22)
+        titleLbl.Position = UDim2.new(0, 14, 0, 7)
+        titleLbl.BackgroundTransparency = 1
+        titleLbl.Text = title
+        titleLbl.TextColor3 = Color3.fromRGB(248, 250, 252)
+        titleLbl.Font = Enum.Font.GothamBold
+        titleLbl.TextSize = 13
+        titleLbl.TextXAlignment = Enum.TextXAlignment.Left
+        titleLbl.ZIndex = 15
+        titleLbl.Active = false
+        titleLbl.Parent = card
+        
+        local descLbl = Instance.new("TextLabel")
+        descLbl.Size = UDim2.new(1, -70, 0, 16)
+        descLbl.Position = UDim2.new(0, 14, 0, 28)
+        descLbl.BackgroundTransparency = 1
+        descLbl.Text = desc
+        descLbl.TextColor3 = Color3.fromRGB(148, 163, 184)
+        descLbl.Font = Enum.Font.Gotham
+        descLbl.TextSize = 11
+        descLbl.TextXAlignment = Enum.TextXAlignment.Left
+        descLbl.ZIndex = 15
+        descLbl.Active = false
+        descLbl.Parent = card
+        
+        local pillSwitch = Instance.new("Frame")
+        pillSwitch.Size = UDim2.fromOffset(46, 24)
+        pillSwitch.Position = UDim2.new(1, -58, 0.5, -12)
+        pillSwitch.BackgroundColor3 = defaultVal and Color3.fromRGB(34, 197, 94) or Color3.fromRGB(51, 65, 85)
+        pillSwitch.BackgroundTransparency = 0.2
+        pillSwitch.ZIndex = 16
+        pillSwitch.Active = false
+        pillSwitch.Parent = card
+        
+        local pillCorner = Instance.new("UICorner")
+        pillCorner.CornerRadius = UDim.new(1, 0)
+        pillCorner.Parent = pillSwitch
+        
+        local indicator = Instance.new("Frame")
+        indicator.Size = UDim2.fromOffset(18, 18)
+        indicator.Position = defaultVal and UDim2.new(1, -21, 0.5, -9) or UDim2.new(0, 3, 0.5, -9)
+        indicator.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        indicator.ZIndex = 17
+        indicator.Active = false
+        indicator.Parent = pillSwitch
+        
+        local indCorner = Instance.new("UICorner")
+        indCorner.CornerRadius = UDim.new(1, 0)
+        indCorner.Parent = indicator
+        
+        local clickHitbox = Instance.new("TextButton")
+        clickHitbox.Name = "ClickHitbox"
+        clickHitbox.Size = UDim2.fromScale(1, 1)
+        clickHitbox.Position = UDim2.fromScale(0, 0)
+        clickHitbox.BackgroundTransparency = 1
+        clickHitbox.Text = ""
+        clickHitbox.ZIndex = 50
+        clickHitbox.Active = true
+        clickHitbox.Selectable = false
+        clickHitbox.AutoButtonColor = false
+        clickHitbox.Parent = card
+        
+        local state = defaultVal
+        local lastClickTime = 0
+        local function ToggleState()
+            local now = os.clock()
+            if (now - lastClickTime) < 0.25 then return end
+            lastClickTime = now
+            
+            state = not state
+            local targetPos = state and UDim2.new(1, -21, 0.5, -9) or UDim2.new(0, 3, 0.5, -9)
+            local targetSwitchColor = state and Color3.fromRGB(34, 197, 94) or Color3.fromRGB(51, 65, 85)
+            local targetStrokeColor = state and Color3.fromRGB(34, 197, 94) or Color3.fromRGB(100, 116, 139)
+            local targetStrokeTrans = state and 0.1 or 0.65
+            local targetCardColor = state and Color3.fromRGB(16, 185, 129) or Color3.fromRGB(20, 30, 48)
+            local targetCardTrans = state and 0.70 or Config.ButtonOpacity
+            
+            TweenService:Create(indicator, TweenInfo.new(0.18), {Position = targetPos}):Play()
+            TweenService:Create(pillSwitch, TweenInfo.new(0.18), {BackgroundColor3 = targetSwitchColor}):Play()
+            TweenService:Create(stroke, TweenInfo.new(0.18), {Color = targetStrokeColor, Transparency = targetStrokeTrans}):Play()
+            TweenService:Create(card, TweenInfo.new(0.18), {BackgroundColor3 = targetCardColor, BackgroundTransparency = targetCardTrans}):Play()
+            callback(state)
+        end
+        clickHitbox.Activated:Connect(ToggleState)
+    end
+    
+    -- Component Creator: Slider
+    local function CreateSlider(parent, title, minVal, maxVal, defaultVal, callback)
+        local card = Instance.new("Frame")
+        card.Size = UDim2.new(1, 0, 0, 60)
+        card.BackgroundColor3 = Color3.fromRGB(20, 30, 48)
+        card.BackgroundTransparency = Config.ButtonOpacity
+        card.BorderSizePixel = 0
+        card.ZIndex = 14
+        card.Parent = parent
+        table.insert(allCards, card)
+        
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 10)
+        corner.Parent = card
+        
+        local stroke = Instance.new("UIStroke")
+        stroke.Color = Color3.fromRGB(100, 116, 139)
+        stroke.Thickness = 1
+        stroke.Transparency = 0.65
+        stroke.Parent = card
+        
+        local titleLbl = Instance.new("TextLabel")
+        titleLbl.Size = UDim2.new(0.7, 0, 0, 20)
+        titleLbl.Position = UDim2.new(0, 14, 0, 8)
+        titleLbl.BackgroundTransparency = 1
+        titleLbl.Text = title
+        titleLbl.TextColor3 = Color3.fromRGB(248, 250, 252)
+        titleLbl.Font = Enum.Font.GothamBold
+        titleLbl.TextSize = 13
+        titleLbl.TextXAlignment = Enum.TextXAlignment.Left
+        titleLbl.ZIndex = 15
+        titleLbl.Active = false
+        titleLbl.Parent = card
+        
+        local valLbl = Instance.new("TextLabel")
+        valLbl.Size = UDim2.new(0.3, -28, 0, 20)
+        valLbl.Position = UDim2.new(0.7, 0, 0, 8)
+        valLbl.BackgroundTransparency = 1
+        valLbl.Text = tostring(defaultVal)
+        valLbl.TextColor3 = Config.AccentColor
+        valLbl.Font = Enum.Font.GothamBold
+        valLbl.TextSize = 13
+        valLbl.TextXAlignment = Enum.TextXAlignment.Right
+        valLbl.ZIndex = 15
+        valLbl.Active = false
+        valLbl.Parent = card
+        
+        local track = Instance.new("Frame")
+        track.Size = UDim2.new(1, -28, 0, 12)
+        track.Position = UDim2.new(0, 14, 0, 36)
+        track.BackgroundColor3 = Color3.fromRGB(51, 65, 85)
+        track.BackgroundTransparency = 0.6
+        track.BorderSizePixel = 0
+        track.ZIndex = 15
+        track.Parent = card
+        
+        local trackCorner = Instance.new("UICorner")
+        trackCorner.CornerRadius = UDim.new(1, 0)
+        trackCorner.Parent = track
+        
+        local fillRatio = math.clamp((defaultVal - minVal) / (maxVal - minVal), 0, 1)
+        local fill = Instance.new("Frame")
+        fill.Size = UDim2.new(fillRatio, 0, 1, 0)
+        fill.BackgroundColor3 = Config.AccentColor
+        fill.BorderSizePixel = 0
+        fill.ZIndex = 16
+        fill.Parent = track
+        
+        local fillCorner = Instance.new("UICorner")
+        fillCorner.CornerRadius = UDim.new(1, 0)
+        fillCorner.Parent = fill
+        
+        local knob = Instance.new("Frame")
+        knob.Size = UDim2.fromOffset(18, 18)
+        knob.Position = UDim2.new(1, -9, 0.5, -9)
+        knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        knob.ZIndex = 17
+        knob.Parent = fill
+        
+        local knobCorner = Instance.new("UICorner")
+        knobCorner.CornerRadius = UDim.new(1, 0)
+        knobCorner.Parent = knob
+        
+        local sliderOverlay = Instance.new("TextButton")
+        sliderOverlay.Size = UDim2.new(1, 0, 0, 24)
+        sliderOverlay.Position = UDim2.new(0, 0, 0.5, -12)
+        sliderOverlay.BackgroundTransparency = 1
+        sliderOverlay.Text = ""
+        sliderOverlay.ZIndex = 50
+        sliderOverlay.Active = true
+        sliderOverlay.Parent = track
+        
+        local sliding = false
+        local function UpdateFromInput(input)
+            local mouseX = input.Position.X
+            local trackX = track.AbsolutePosition.X
+            local trackWidth = track.AbsoluteSize.X
+            local pct = math.clamp((mouseX - trackX) / trackWidth, 0, 1)
+            local calculatedVal = math.floor(minVal + (maxVal - minVal) * pct)
+            fill.Size = UDim2.new(pct, 0, 1, 0)
+            valLbl.Text = tostring(calculatedVal)
+            callback(calculatedVal)
+        end
+        
+        sliderOverlay.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                sliding = true
+                UpdateFromInput(input)
+            end
+        end)
+        UserInputService.InputChanged:Connect(function(input)
+            if sliding and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                UpdateFromInput(input)
+            end
+        end)
+        UserInputService.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                sliding = false
+            end
+        end)
+    end
+    
+    -- ==========================================
+    -- TAB 1: VISUALS
+    -- ==========================================
+    local VisualsPage = TabFrames["Visuals"]
+    CreateToggle(VisualsPage, "Aberrant Killer ESP", "Chams & distance tracker for main AI killer (Seeker)", Config.AberrantESP, function(val) Config.AberrantESP = val end)
+    CreateToggle(VisualsPage, "Adversaries ESP", "Highlights secondary cohort killers in bright orange", Config.AdversaryESP, function(val) Config.AdversaryESP = val end)
+    CreateToggle(VisualsPage, "Survivors ESP", "Highlights survivors & teammates with health info", Config.SurvivorESP, function(val) Config.SurvivorESP = val end)
+    CreateToggle(VisualsPage, "Aberrant Tracers", "Draws direct direction snapline to the nearest killer", Config.Tracers, function(val) Config.Tracers = val end)
+    CreateToggle(VisualsPage, "Status Billboards", "Overhead billboard with exact distance & health tag", Config.ESPBoxes, function(val)
+        Config.ESPBoxes = val
+        if not val then
+            for _, folderName in ipairs({"Entities", "Survivors"}) do
+                local f = workspace:FindFirstChild(folderName)
+                if f then
+                    for _, char in ipairs(f:GetChildren()) do
+                        local bb = char:FindFirstChild("VibeStatusBillboard", true)
                         if bb then bb:Destroy() end
-                        bb = Instance.new("BillboardGui")
-                        bb.Name = "VibeStatusBillboard"
-                        bb.Adornee = head
-                        bb.Size = UDim2.fromOffset(140, 44)
-                        bb.StudsOffset = Vector3.new(0, 2.5, 0)
-                        bb.AlwaysOnTop = true
-                        bb.LightInfluence = 0
-                        bb.MaxDistance = 600
-                        bb.Parent = head
-                        
-                        local bg = Instance.new("Frame")
-                        bg.Size = UDim2.fromScale(1, 1)
-                        bg.BackgroundColor3 = Color3.fromRGB(15, 23, 42)
-                        bg.BackgroundTransparency = 0.3
-                        bg.BorderSizePixel = 0
-                        bg.Parent = bb
-                        
-                        local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 8); c.Parent = bg
-                        local s = Instance.new("UIStroke"); s.Color = roleColor; s.Thickness = 1.2; s.Parent = bg
-                        
-                        local nLbl = Instance.new("TextLabel")
-                        nLbl.Name = "NameLabel"
-                        nLbl.Size = UDim2.new(1, -8, 0, 18)
-                        nLbl.Position = UDim2.new(0, 4, 0, 3)
-                        nLbl.BackgroundTransparency = 1
-                        nLbl.TextColor3 = roleColor
-                        nLbl.Font = Enum.Font.GothamBold
-                        nLbl.TextSize = 11
-                        nLbl.TextTruncate = Enum.TextTruncate.AtEnd
-                        nLbl.Parent = bg
-                        
-                        local sLbl = Instance.new("TextLabel")
-                        sLbl.Name = "StatLabel"
-                        sLbl.Size = UDim2.new(1, -8, 0, 16)
-                        sLbl.Position = UDim2.new(0, 4, 0, 22)
-                        sLbl.BackgroundTransparency = 1
-                        sLbl.TextColor3 = Color3.fromRGB(241, 245, 249)
-                        sLbl.Font = Enum.Font.GothamMedium
-                        sLbl.TextSize = 10
-                        sLbl.Parent = bg
-                        
-                        activeBillboards[char] = bb
-                    end
-                    local dist = myRoot and math.floor((head.Position - myRoot.Position).Magnitude) or 0
-                    local hp = math.floor(hum.Health)
-                    local maxHp = math.floor(hum.MaxHealth)
-                    local roleTag = isKiller and "KILLER" or "SURVIVOR"
-                    local nLbl = bb:FindFirstChild("NameLabel", true)
-                    local sLbl = bb:FindFirstChild("StatLabel", true)
-                    if nLbl then nLbl.Text = string.format("[%s] %s", roleTag, char.Name) end
-                    if sLbl then sLbl.Text = string.format("%d studs • %d/%d HP", dist, hp, maxHp) end
-                else
-                    if bb then
-                        bb:Destroy()
-                        activeBillboards[char] = nil
                     end
                 end
-            elseif activeBillboards[char] then
-                activeBillboards[char]:Destroy()
-                activeBillboards[char] = nil
+            end
+        end
+    end)
+    
+    -- ==========================================
+    -- TAB 2: MOVEMENT
+    -- ==========================================
+    local MovePage = TabFrames["Movement"]
+    CreateToggle(MovePage, "WalkSpeed Boost", "Overrides movement speed without tripping resets", Config.SpeedEnabled, function(val)
+        Config.SpeedEnabled = val
+        if not val and LocalPlayer.Character then
+            local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if hum then hum.WalkSpeed = 30 end
+        end
+    end)
+    CreateSlider(MovePage, "WalkSpeed Multiplier", 30, 120, Config.SpeedValue, function(val)
+        Config.SpeedValue = val
+        if Config.SpeedEnabled and LocalPlayer.Character then
+            local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if hum then hum.WalkSpeed = val end
+        end
+    end)
+    CreateToggle(MovePage, "Jump Boost", "Increases jump power & vertical leap height", Config.JumpEnabled, function(val)
+        Config.JumpEnabled = val
+        if not val and LocalPlayer.Character then
+            local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if hum then hum.UseJumpPower = false; hum.JumpHeight = 7.2 end
+        end
+    end)
+    CreateSlider(MovePage, "Jump Power Level", 50, 160, Config.JumpValue, function(val)
+        Config.JumpValue = val
+        if Config.JumpEnabled and LocalPlayer.Character then
+            local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if hum then hum.UseJumpPower = true; hum.JumpPower = val end
+        end
+    end)
+    CreateToggle(MovePage, "Infinite Jump", "Allows jumping continuously mid-air by holding Space", Config.InfiniteJump, function(val) Config.InfiniteJump = val end)
+    CreateToggle(MovePage, "Noclip", "Walk through walls, trees, fences & invisible map barriers", Config.Noclip, function(val) Config.Noclip = val end)
+    CreateToggle(MovePage, "Flight Mode", "Fly freely through the map with WASD + Space/Shift", Config.FlyEnabled, function(val) Config.FlyEnabled = val end)
+    CreateSlider(MovePage, "Flight Speed", 20, 120, Config.FlySpeed, function(val) Config.FlySpeed = val end)
+    
+    -- ==========================================
+    -- TAB 3: MATCH RADAR
+    -- ==========================================
+    local RadarPage = TabFrames["Radar"]
+    local RadarOverview = Instance.new("Frame")
+    RadarOverview.Size = UDim2.new(1, 0, 0, 100)
+    RadarOverview.BackgroundColor3 = Color3.fromRGB(24, 34, 53)
+    RadarOverview.BackgroundTransparency = 0.82
+    RadarOverview.BorderSizePixel = 0
+    RadarOverview.ZIndex = 14
+    RadarOverview.Parent = RadarPage
+    local RO_Corner = Instance.new("UICorner"); RO_Corner.CornerRadius = UDim.new(0, 10); RO_Corner.Parent = RadarOverview
+    local RO_Stroke = Instance.new("UIStroke"); RO_Stroke.Color = Config.AccentColor; RO_Stroke.Thickness = 1.2; RO_Stroke.Transparency = 0.65; RO_Stroke.Parent = RadarOverview
+    local RO_Title = Instance.new("TextLabel"); RO_Title.Size = UDim2.new(1, -20, 0, 20); RO_Title.Position = UDim2.new(0, 12, 0, 6); RO_Title.BackgroundTransparency = 1; RO_Title.Text = "📡 LIVE MATCH TELEMETRY OVERVIEW"; RO_Title.TextColor3 = Config.AccentColor; RO_Title.Font = Enum.Font.GothamBold; RO_Title.TextSize = 12; RO_Title.TextXAlignment = Enum.TextXAlignment.Left; RO_Title.ZIndex = 15; RO_Title.Parent = RadarOverview
+    local RO_Body = Instance.new("TextLabel"); RO_Body.Name = "TelemetryText"; RO_Body.Size = UDim2.new(1, -24, 0, 68); RO_Body.Position = UDim2.new(0, 12, 0, 26); RO_Body.BackgroundTransparency = 1; RO_Body.Text = "Phase: Scanning...\nMap: Reading...\nAlive Survivors: 0 | Killers: 0"; RO_Body.TextColor3 = Color3.fromRGB(226, 232, 240); RO_Body.Font = Enum.Font.GothamMedium; RO_Body.TextSize = 12; RO_Body.TextXAlignment = Enum.TextXAlignment.Left; RO_Body.TextYAlignment = Enum.TextYAlignment.Top; RO_Body.ZIndex = 15; RO_Body.Parent = RadarOverview
+    
+    CreateToggle(RadarPage, "Killer Danger Warning", "Displays flashing screen alert when killer enters danger radius", Config.ProximityAlert, function(val)
+        Config.ProximityAlert = val
+        if not val then DangerBanner.Visible = false end
+    end)
+    CreateSlider(RadarPage, "Danger Proximity Radius (Studs)", 30, 150, Config.ProximityDist, function(val) Config.ProximityDist = val end)
+    
+    local RosterCard = Instance.new("Frame"); RosterCard.Size = UDim2.new(1, 0, 0, 130); RosterCard.BackgroundColor3 = Color3.fromRGB(24, 34, 53); RosterCard.BackgroundTransparency = 0.82; RosterCard.BorderSizePixel = 0; RosterCard.ZIndex = 14; RosterCard.Parent = RadarPage
+    local RosterCorner = Instance.new("UICorner"); RosterCorner.CornerRadius = UDim.new(0, 10); RosterCorner.Parent = RosterCard
+    local RosterStroke = Instance.new("UIStroke"); RosterStroke.Color = Color3.fromRGB(34, 197, 94); RosterStroke.Thickness = 1.2; RosterStroke.Transparency = 0.65; RosterStroke.Parent = RosterCard
+    local RosterTitle = Instance.new("TextLabel"); RosterTitle.Size = UDim2.new(1, -20, 0, 20); RosterTitle.Position = UDim2.new(0, 12, 0, 6); RosterTitle.BackgroundTransparency = 1; RosterTitle.Text = "👥 SURVIVORS & HEALTH MONITOR"; RosterTitle.TextColor3 = Color3.fromRGB(74, 222, 128); RosterTitle.Font = Enum.Font.GothamBold; RosterTitle.TextSize = 12; RosterTitle.TextXAlignment = Enum.TextXAlignment.Left; RosterTitle.ZIndex = 15; RosterTitle.Parent = RosterCard
+    local RosterScroller = Instance.new("ScrollingFrame"); RosterScroller.Size = UDim2.new(1, -24, 0, 96); RosterScroller.Position = UDim2.new(0, 12, 0, 28); RosterScroller.BackgroundTransparency = 1; RosterScroller.BorderSizePixel = 0; RosterScroller.ScrollBarThickness = 3; RosterScroller.ScrollBarImageColor3 = Color3.fromRGB(34, 197, 94); RosterScroller.AutomaticCanvasSize = Enum.AutomaticSize.Y; RosterScroller.ZIndex = 15; RosterScroller.Parent = RosterCard
+    local RosterLayout = Instance.new("UIListLayout"); RosterLayout.SortOrder = Enum.SortOrder.LayoutOrder; RosterLayout.Padding = UDim.new(0, 4); RosterLayout.Parent = RosterScroller
+    
+    local ThreatCard = Instance.new("Frame"); ThreatCard.Size = UDim2.new(1, 0, 0, 80); ThreatCard.BackgroundColor3 = Color3.fromRGB(24, 34, 53); ThreatCard.BackgroundTransparency = 0.82; ThreatCard.BorderSizePixel = 0; ThreatCard.ZIndex = 14; ThreatCard.Parent = RadarPage
+    local ThreatCorner = Instance.new("UICorner"); ThreatCorner.CornerRadius = UDim.new(0, 10); ThreatCorner.Parent = ThreatCard
+    local ThreatStroke = Instance.new("UIStroke"); ThreatStroke.Color = Color3.fromRGB(239, 68, 68); ThreatStroke.Thickness = 1.2; ThreatStroke.Transparency = 0.65; ThreatStroke.Parent = ThreatCard
+    local ThreatTitle = Instance.new("TextLabel"); ThreatTitle.Size = UDim2.new(1, -20, 0, 20); ThreatTitle.Position = UDim2.new(0, 12, 0, 6); ThreatTitle.BackgroundTransparency = 1; ThreatTitle.Text = "💀 ACTIVE KILLERS & THREAT RADAR"; ThreatTitle.TextColor3 = Color3.fromRGB(248, 113, 113); ThreatTitle.Font = Enum.Font.GothamBold; ThreatTitle.TextSize = 12; ThreatTitle.TextXAlignment = Enum.TextXAlignment.Left; ThreatTitle.ZIndex = 15; ThreatTitle.Parent = ThreatCard
+    local ThreatBody = Instance.new("TextLabel"); ThreatBody.Size = UDim2.new(1, -24, 0, 50); ThreatBody.Position = UDim2.new(0, 12, 0, 26); ThreatBody.BackgroundTransparency = 1; ThreatBody.Text = "Scanning active killer threats..."; ThreatBody.TextColor3 = Color3.fromRGB(241, 245, 249); ThreatBody.Font = Enum.Font.GothamMedium; ThreatBody.TextSize = 11; ThreatBody.TextXAlignment = Enum.TextXAlignment.Left; ThreatBody.TextYAlignment = Enum.TextYAlignment.Top; ThreatBody.ZIndex = 15; ThreatBody.Parent = ThreatCard
+    
+    CreateToggle(RadarPage, "Remove Map Boundaries", "Disables invisible barriers so radar navigation is never blocked", Config.RemoveBarriers, function(val)
+        Config.RemoveBarriers = val
+        local map = workspace:FindFirstChild("GameMap")
+        if map then
+            for _, folderName in ipairs({"MapBarriers_Invisible", "MapBarriers_True"}) do
+                local folder = map:FindFirstChild(folderName)
+                if folder then
+                    for _, barrier in ipairs(folder:GetChildren()) do
+                        if barrier:IsA("BasePart") then barrier.CanCollide = not val end
+                    end
+                end
+            end
+        end
+    end)
+    
+    -- ==========================================
+    -- TAB 4: AMBIENCE & FX
+    -- ==========================================
+    local AmbiencePage = TabFrames["Ambience"]
+    CreateToggle(AmbiencePage, "Fullbright", "Removes shadows & darkness, sets max bright ambient lighting", Config.Fullbright, function(val)
+        Config.Fullbright = val
+        if not val then
+            Lighting.Ambient = origLighting.Ambient
+            Lighting.OutdoorAmbient = origLighting.OutdoorAmbient
+            Lighting.Brightness = origLighting.Brightness
+            Lighting.ClockTime = origLighting.ClockTime
+        end
+    end)
+    CreateToggle(AmbiencePage, "Remove Fog & Hazes", "Completely clears distance fog, haze and murky atmosphere", Config.NoFog, function(val)
+        Config.NoFog = val
+        if val then
+            Lighting.FogEnd = 1e6
+            local atmo = Lighting:FindFirstChildOfClass("Atmosphere")
+            if atmo then atmo.Density = 0 end
+        else
+            Lighting.FogEnd = origLighting.FogEnd
+        end
+    end)
+    CreateToggle(AmbiencePage, "Anti-Screen FX", "Immunity to flashbangs, red hurt vignettes & blur overlays", Config.CleanScreenFX, function(val)
+        Config.CleanScreenFX = val
+        pcall(function()
+            local pgui = LocalPlayer:FindFirstChild("PlayerGui")
+            if pgui and pgui:FindFirstChild("PlayerGui") then
+                local pg = pgui.PlayerGui
+                if pg:FindFirstChild("Hurt_1") then pg.Hurt_1.Visible = not val end
+                if pg:FindFirstChild("Hurt_2") then pg.Hurt_2.Visible = not val end
+                if pg:FindFirstChild("ChaseVignette") then pg.ChaseVignette.Visible = not val end
+            end
+            local dof = Lighting:FindFirstChildOfClass("DepthOfFieldEffect")
+            if dof then dof.Enabled = not val end
+        end)
+    end)
+    CreateToggle(AmbiencePage, "Anti-Ragdoll Support", "Prevents character ragdolling & restores upright posture instantly", Config.AntiRagdoll, function(val)
+        Config.AntiRagdoll = val
+        if val and LocalPlayer.Character then
+            local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if hum then
+                hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
+                hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+            end
+        end
+    end)
+    
+    -- ==========================================
+    -- TAB 5: KILLER'S HELPER
+    -- ==========================================
+    local CombatPage = TabFrames["Combat"]
+    CreateToggle(CombatPage, "Target Survivors Only", "Locks onto SURVIVORS ONLY. Protects Aberrant & fellow Adversaries", true, function(val)
+        Config.TargetRole = val and "Survivors" or "Entities"
+    end)
+    CreateToggle(CombatPage, "Target Lock 360 (Aim Assist)", "360° lock! Steers camera towards closest target from ANY angle (Hold Right Click)", Config.TargetLock, function(val)
+        Config.TargetLock = val
+    end)
+    CreateToggle(CombatPage, "360° Acquisition Mode", "When enabled, acquires targets in a full 360° sphere around you (Ignores FOV)", Config.Lock360, function(val)
+        Config.Lock360 = val
+    end)
+    CreateSlider(CombatPage, "Lock Smoothness", 1, 15, Config.LockSmoothness, function(val) Config.LockSmoothness = val end)
+    CreateToggle(CombatPage, "Show Targeting FOV Circle", "Draws visual acquisition circle in the middle of your screen", Config.ShowFOV, function(val) Config.ShowFOV = val end)
+    CreateSlider(CombatPage, "Targeting FOV Radius", 50, 300, Config.FOVRadius, function(val) Config.FOVRadius = val end)
+    CreateToggle(CombatPage, "Auto-Swing (Trigger Assist)", "Auto attacks when an enemy SURVIVOR enters reach (Never triggers on teammates)", Config.AutoSwing, function(val) Config.AutoSwing = val end)
+    CreateSlider(CombatPage, "Attack Reach Distance (Studs)", 8, 30, Config.AttackRange, function(val) Config.AttackRange = val end)
+    CreateToggle(CombatPage, "Target Face Assist (360 Look-At)", "Forces your character's body to face directly at the target survivor in 360°", Config.LookAtTarget, function(val) Config.LookAtTarget = val end)
+    CreateToggle(CombatPage, "Survivor Path Prediction", "Projects yellow trajectory line showing where the survivor is running", Config.PathPrediction, function(val) Config.PathPrediction = val end)
+    
+    local TargetStatusCard = Instance.new("Frame"); TargetStatusCard.Size = UDim2.new(1, 0, 0, 52); TargetStatusCard.BackgroundColor3 = Color3.fromRGB(30, 41, 59); TargetStatusCard.BackgroundTransparency = 0.85; TargetStatusCard.BorderSizePixel = 0; TargetStatusCard.ZIndex = 14; TargetStatusCard.Parent = CombatPage
+    local TSC_Corner = Instance.new("UICorner"); TSC_Corner.CornerRadius = UDim.new(0, 10); TSC_Corner.Parent = TargetStatusCard
+    local TSC_Stroke = Instance.new("UIStroke"); TSC_Stroke.Color = Color3.fromRGB(239, 68, 68); TSC_Stroke.Thickness = 1; TSC_Stroke.Transparency = 0.65; TSC_Stroke.Parent = TargetStatusCard
+    local TargetStatusLbl = Instance.new("TextLabel"); TargetStatusLbl.Name = "TargetStatusText"; TargetStatusLbl.Size = UDim2.new(1, -20, 1, 0); TargetStatusLbl.Position = UDim2.new(0, 12, 0, 0); TargetStatusLbl.BackgroundTransparency = 1; TargetStatusLbl.Text = "🎯 Locked Target: None [0m away]"; TargetStatusLbl.TextColor3 = Color3.fromRGB(248, 113, 113); TargetStatusLbl.Font = Enum.Font.GothamBold; TargetStatusLbl.TextSize = 12; TargetStatusLbl.TextXAlignment = Enum.TextXAlignment.Left; TargetStatusLbl.ZIndex = 15; TargetStatusLbl.Parent = TargetStatusCard
+    
+    -- ==========================================
+    -- TAB 6: SURVIVOR'S HELPER
+    -- ==========================================
+    local SurvPage = TabFrames["Survivor"]
+    local HazardCard = Instance.new("Frame"); HazardCard.Size = UDim2.new(1, 0, 0, 75); HazardCard.BackgroundColor3 = Color3.fromRGB(24, 34, 53); HazardCard.BackgroundTransparency = 0.82; HazardCard.BorderSizePixel = 0; HazardCard.ZIndex = 14; HazardCard.Parent = SurvPage
+    local HC_Corner = Instance.new("UICorner"); HC_Corner.CornerRadius = UDim.new(0, 10); HC_Corner.Parent = HazardCard
+    local HC_Stroke = Instance.new("UIStroke"); HC_Stroke.Color = Color3.fromRGB(16, 185, 129); HC_Stroke.Thickness = 1.2; HC_Stroke.Transparency = 0.65; HC_Stroke.Parent = HazardCard
+    local HC_Title = Instance.new("TextLabel"); HC_Title.Size = UDim2.new(1, -20, 0, 20); HC_Title.Position = UDim2.new(0, 12, 0, 6); HC_Title.BackgroundTransparency = 1; HC_Title.Text = "🛡️ KILLER PROXIMITY HAZARD METER"; HC_Title.TextColor3 = Color3.fromRGB(52, 211, 153); HC_Title.Font = Enum.Font.GothamBold; HC_Title.TextSize = 12; HC_Title.TextXAlignment = Enum.TextXAlignment.Left; HC_Title.ZIndex = 15; HC_Title.Parent = HazardCard
+    local HC_Status = Instance.new("TextLabel"); HC_Status.Name = "HazardText"; HC_Status.Size = UDim2.new(1, -24, 0, 42); HC_Status.Position = UDim2.new(0, 12, 0, 28); HC_Status.BackgroundTransparency = 1; HC_Status.Text = "Nearest Killer: Scanning...\nSafety Zone: 🟢 SAFE (>80m)"; HC_Status.TextColor3 = Color3.fromRGB(241, 245, 249); HC_Status.Font = Enum.Font.GothamMedium; HC_Status.TextSize = 12; HC_Status.TextXAlignment = Enum.TextXAlignment.Left; HC_Status.ZIndex = 15; HC_Status.Parent = HazardCard
+    
+    CreateToggle(SurvPage, "Auto-Evade Speed Burst", "Instantly triggers speed burst when a killer gets dangerously close", Config.AutoEvade, function(val) Config.AutoEvade = val end)
+    CreateSlider(SurvPage, "Evade Activation Range (Studs)", 15, 60, Config.EvadeDistance, function(val) Config.EvadeDistance = val end)
+    CreateToggle(SurvPage, "Escape Direction Vector", "Draws green directional line pointing directly AWAY from the nearest killer", Config.EscapeVector, function(val) Config.EscapeVector = val end)
+    CreateToggle(SurvPage, "Teammate Low-HP Alert", "Sounds/highlights alerts when any fellow survivor drops below 40% HP", Config.MedAlert, function(val) Config.MedAlert = val end)
+    CreateToggle(SurvPage, "Anti-Stagger & Quick Recover", "Prevents slowdowns and staggers after taking damage", Config.AntiStagger, function(val) Config.AntiStagger = val end)
+    
+    -- =========================================================================
+    -- TAB 7: SETTINGS & DEEP UI CUSTOMIZATION (COMPLETELY EXPANDED!)
+    -- =========================================================================
+    local SetPage = TabFrames["Settings"]
+    
+    -- Feature 1: Custom Image Asset ID / URL Input
+    local CustomImgCard = Instance.new("Frame")
+    CustomImgCard.Size = UDim2.new(1, 0, 0, 80)
+    CustomImgCard.BackgroundColor3 = Color3.fromRGB(20, 30, 48)
+    CustomImgCard.BackgroundTransparency = Config.ButtonOpacity
+    CustomImgCard.BorderSizePixel = 0
+    CustomImgCard.ZIndex = 14
+    CustomImgCard.Parent = SetPage
+    table.insert(allCards, CustomImgCard)
+    
+    local CIC_Corner = Instance.new("UICorner"); CIC_Corner.CornerRadius = UDim.new(0, 10); CIC_Corner.Parent = CustomImgCard
+    local CIC_Stroke = Instance.new("UIStroke"); CIC_Stroke.Color = Config.AccentColor; CIC_Stroke.Thickness = 1.2; CIC_Stroke.Transparency = 0.65; CIC_Stroke.Parent = CustomImgCard
+    local CIC_Title = Instance.new("TextLabel"); CIC_Title.Size = UDim2.new(1, -20, 0, 20); CIC_Title.Position = UDim2.new(0, 12, 0, 6); CIC_Title.BackgroundTransparency = 1; CIC_Title.Text = "🖼️ CUSTOM WALLPAPER (Enter Any Asset ID or URL)"; CIC_Title.TextColor3 = Color3.fromRGB(248, 250, 252); CIC_Title.Font = Enum.Font.GothamBold; CIC_Title.TextSize = 12; CIC_Title.TextXAlignment = Enum.TextXAlignment.Left; CIC_Title.ZIndex = 15; CIC_Title.Parent = CustomImgCard
+    
+    local ImgInput = Instance.new("TextBox")
+    ImgInput.Size = UDim2.new(1, -165, 0, 32)
+    ImgInput.Position = UDim2.new(0, 12, 0, 34)
+    ImgInput.BackgroundColor3 = Color3.fromRGB(15, 23, 42)
+    ImgInput.BackgroundTransparency = 0.4
+    ImgInput.PlaceholderText = "Paste Discord URL or Asset ID..."
+    ImgInput.PlaceholderColor3 = Color3.fromRGB(148, 163, 184)
+    ImgInput.Text = ""
+    ImgInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+    ImgInput.Font = Enum.Font.GothamMedium
+    ImgInput.TextSize = 11
+    ImgInput.ClearTextOnFocus = false
+    ImgInput.ZIndex = 16
+    ImgInput.Parent = CustomImgCard
+    local II_Corner = Instance.new("UICorner"); II_Corner.CornerRadius = UDim.new(0, 6); II_Corner.Parent = ImgInput
+    local II_Stroke = Instance.new("UIStroke"); II_Stroke.Color = Color3.fromRGB(71, 85, 105); II_Stroke.Transparency = 0.5; II_Stroke.Parent = ImgInput
+    
+    local ClearImgBtn = Instance.new("TextButton")
+    ClearImgBtn.Size = UDim2.fromOffset(45, 32)
+    ClearImgBtn.Position = UDim2.new(1, -145, 0, 34)
+    ClearImgBtn.BackgroundColor3 = Color3.fromRGB(30, 41, 59)
+    ClearImgBtn.Text = "Clear"
+    ClearImgBtn.TextColor3 = Color3.fromRGB(203, 213, 225)
+    ClearImgBtn.Font = Enum.Font.GothamBold
+    ClearImgBtn.TextSize = 10
+    ClearImgBtn.ZIndex = 16
+    ClearImgBtn.Parent = CustomImgCard
+    local CIB_Corner = Instance.new("UICorner"); CIB_Corner.CornerRadius = UDim.new(0, 6); CIB_Corner.Parent = ClearImgBtn
+    
+    ClearImgBtn.Activated:Connect(function()
+        ImgInput.Text = ""
+    end)
+    
+    local ApplyImgBtn = Instance.new("TextButton")
+    ApplyImgBtn.Size = UDim2.fromOffset(92, 32)
+    ApplyImgBtn.Position = UDim2.new(1, -96, 0, 34)
+    ApplyImgBtn.BackgroundColor3 = Config.AccentColor
+    ApplyImgBtn.Text = "Apply Image"
+    ApplyImgBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    ApplyImgBtn.Font = Enum.Font.GothamBold
+    ApplyImgBtn.TextSize = 11
+    ApplyImgBtn.ZIndex = 16
+    ApplyImgBtn.Parent = CustomImgCard
+    local AIB_Corner = Instance.new("UICorner"); AIB_Corner.CornerRadius = UDim.new(0, 6); AIB_Corner.Parent = ApplyImgBtn
+    
+    ApplyImgBtn.Activated:Connect(function()
+        local rawText = ImgInput.Text
+        if not rawText or #rawText == 0 then
+            ApplyImgBtn.Text = "Enter URL first!"
+            task.delay(1.5, function() ApplyImgBtn.Text = "Apply Image" end)
+            return
+        end
+        rawText = string.gsub(rawText, "^%s*(.-)%s*$", "%1")
+        ApplyImgBtn.Text = "Loading..."
+        task.spawn(function()
+            local resolved = LoadImageSource(rawText)
+            if resolved and #resolved > 0 then
+                Config.CurrentWallpaper = rawText
+                BeachBG.Image = ""
+                task.wait(0.05)
+                BeachBG.Image = resolved
+                BeachBG.ImageTransparency = Config.BGOpacity
+                ApplyImgBtn.Text = "✅ Applied!"
+            else
+                ApplyImgBtn.Text = "❌ Failed!"
+            end
+            task.delay(1.8, function()
+                ApplyImgBtn.Text = "Apply Image"
+            end)
+        end)
+    end)
+    
+    -- Feature 2: Preset Wallpapers
+    local WallCard = Instance.new("Frame")
+    WallCard.Size = UDim2.new(1, 0, 0, 115)
+    WallCard.BackgroundColor3 = Color3.fromRGB(20, 30, 48)
+    WallCard.BackgroundTransparency = Config.ButtonOpacity
+    WallCard.BorderSizePixel = 0
+    WallCard.ZIndex = 14
+    WallCard.Parent = SetPage
+    table.insert(allCards, WallCard)
+    
+    local WC_Corner = Instance.new("UICorner"); WC_Corner.CornerRadius = UDim.new(0, 10); WC_Corner.Parent = WallCard
+    local WC_Stroke = Instance.new("UIStroke"); WC_Stroke.Color = Color3.fromRGB(100, 116, 139); WC_Stroke.Thickness = 1; WC_Stroke.Transparency = 0.65; WC_Stroke.Parent = WallCard
+    local WC_Title = Instance.new("TextLabel"); WC_Title.Size = UDim2.new(1, -20, 0, 20); WC_Title.Position = UDim2.new(0, 12, 0, 6); WC_Title.BackgroundTransparency = 1; WC_Title.Text = "🌴 QUICK PRESET WALLPAPERS"; WC_Title.TextColor3 = Color3.fromRGB(248, 250, 252); WC_Title.Font = Enum.Font.GothamBold; WC_Title.TextSize = 12; WC_Title.TextXAlignment = Enum.TextXAlignment.Left; WC_Title.ZIndex = 15; WC_Title.Parent = WallCard
+    
+    local Wallpapers = {
+        {Name = "🏖️ Beach", Url = "rbxthumb://type=Asset&id=5164275208&w=768&h=432"},
+        {Name = "🌅 Sunset", Url = "rbxthumb://type=Asset&id=3290440107&w=768&h=432"},
+        {Name = "🌊 Ocean", Url = "rbxthumb://type=Asset&id=77196399&w=768&h=432"},
+        {Name = "🌺 Coral", Url = "rbxthumb://type=Asset&id=1523101449&w=768&h=432"},
+        {Name = "🌲 Forest", Url = "rbxthumb://type=Asset&id=1310955863&w=768&h=432"},
+        {Name = "🏙️ City", Url = "rbxthumb://type=Asset&id=13013750843&w=768&h=432"},
+        {Name = "✨ Custom", Url = "https://cdn.discordapp.com/attachments/1554233622960283729/1564034198317043812/images.png?ex=6adfcbdb&is=6ade7a5b&hm=034ead046e9a6603437c7037d4816e8ee3527e4be69ecbf0aba03a85d1d80949&"},
+        {Name = "🪨 Rock", Url = "https://cdn.discordapp.com/attachments/1554233622960283729/1557088013895344239/image.png?backend=b2&ex=6adf9337&is=6ade41b7&hm=c831c3b50cba9b5f06cf346a4b303deb8dd01779b998674ce172d66e91f6bebc&"}
+    }
+    
+    for i, w in ipairs(Wallpapers) do
+        local col = (i - 1) % 4
+        local row = math.floor((i - 1) / 4)
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.fromOffset(112, 32)
+        btn.Position = UDim2.new(0, 10 + col * 118, 0, 32 + row * 38)
+        btn.BackgroundColor3 = Color3.fromRGB(15, 23, 42)
+        btn.BackgroundTransparency = 0.85
+        btn.Text = w.Name
+        btn.TextColor3 = Color3.fromRGB(241, 245, 249)
+        btn.Font = Enum.Font.GothamBold
+        btn.TextSize = 10
+        btn.ZIndex = 16
+        btn.Active = true
+        btn.Parent = WallCard
+        
+        local bCorner = Instance.new("UICorner"); bCorner.CornerRadius = UDim.new(0, 6); bCorner.Parent = btn
+        local bStroke = Instance.new("UIStroke"); bStroke.Color = Color3.fromRGB(71, 85, 105); bStroke.Transparency = 0.65; bStroke.Parent = btn
+        
+        btn.Activated:Connect(function()
+            Config.CurrentWallpaper = w.Url
+            task.spawn(function()
+                local resolved = LoadImageSource(w.Url)
+                if resolved and BeachBG and BeachBG.Parent then
+                    BeachBG.Image = ""
+                    task.wait(0.05)
+                    BeachBG.Image = resolved
+                    BeachBG.ImageTransparency = Config.BGOpacity
+                end
+            end)
+        end)
+    end
+    
+    -- Feature 3: Sliders for Scale & Transparencies
+    CreateSlider(SetPage, "Menu UI Scale (%)", 70, 130, Config.UIScaleValue, function(val)
+        Config.UIScaleValue = val
+        MainScale.Scale = val / 100
+    end)
+    
+    CreateSlider(SetPage, "Wallpaper Transparency (%)", 0, 90, math.floor(Config.BGOpacity * 100), function(val)
+        Config.BGOpacity = val / 100
+        BeachBG.ImageTransparency = Config.BGOpacity
+    end)
+    
+    CreateSlider(SetPage, "Button & Glass Opacity (%)", 50, 95, math.floor(Config.ButtonOpacity * 100), function(val)
+        Config.ButtonOpacity = val / 100
+        for _, card in ipairs(allCards) do
+            card.BackgroundTransparency = Config.ButtonOpacity
+        end
+    end)
+    
+    -- Feature 4: Theme Accent Presets (8 Presets)
+    local ThemeCard = Instance.new("Frame")
+    ThemeCard.Size = UDim2.new(1, 0, 0, 110)
+    ThemeCard.BackgroundColor3 = Color3.fromRGB(20, 30, 48)
+    ThemeCard.BackgroundTransparency = Config.ButtonOpacity
+    ThemeCard.BorderSizePixel = 0
+    ThemeCard.ZIndex = 14
+    ThemeCard.Parent = SetPage
+    table.insert(allCards, ThemeCard)
+    
+    local TC_Corner = Instance.new("UICorner"); TC_Corner.CornerRadius = UDim.new(0, 10); TC_Corner.Parent = ThemeCard
+    local TC_Stroke = Instance.new("UIStroke"); TC_Stroke.Color = Color3.fromRGB(100, 116, 139); TC_Stroke.Thickness = 1; TC_Stroke.Transparency = 0.65; TC_Stroke.Parent = ThemeCard
+    local TC_Title = Instance.new("TextLabel"); TC_Title.Size = UDim2.new(1, -20, 0, 20); TC_Title.Position = UDim2.new(0, 12, 0, 6); TC_Title.BackgroundTransparency = 1; TC_Title.Text = "🎨 ACCENT THEME PRESETS (8 Styles)"; TC_Title.TextColor3 = Color3.fromRGB(248, 250, 252); TC_Title.Font = Enum.Font.GothamBold; TC_Title.TextSize = 12; TC_Title.TextXAlignment = Enum.TextXAlignment.Left; TC_Title.ZIndex = 15; TC_Title.Parent = ThemeCard
+    
+    local ThemeColors = {
+        {Name = "Ocean", Color = Color3.fromRGB(56, 189, 248)},
+        {Name = "Sunset", Color = Color3.fromRGB(245, 158, 11)},
+        {Name = "Coral", Color = Color3.fromRGB(244, 63, 94)},
+        {Name = "City", Color = Color3.fromRGB(168, 85, 247)},
+        {Name = "Emerald", Color = Color3.fromRGB(16, 185, 129)},
+        {Name = "Cyber", Color = Color3.fromRGB(234, 179, 8)},
+        {Name = "Blizzard", Color = Color3.fromRGB(248, 250, 252)},
+        {Name = "Midnight", Color = Color3.fromRGB(100, 116, 139)}
+    }
+    for i, t in ipairs(ThemeColors) do
+        local col = (i - 1) % 4
+        local row = math.floor((i - 1) / 4)
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.fromOffset(105, 28)
+        btn.Position = UDim2.new(0, 12 + col * 115, 0, 32 + row * 36)
+        btn.BackgroundColor3 = t.Color
+        btn.BackgroundTransparency = 0.35
+        btn.Text = t.Name
+        btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        btn.Font = Enum.Font.GothamBold
+        btn.TextSize = 11
+        btn.ZIndex = 16
+        btn.Active = true
+        btn.Parent = ThemeCard
+        
+        local bCorner = Instance.new("UICorner"); bCorner.CornerRadius = UDim.new(0, 6); bCorner.Parent = btn
+        btn.Activated:Connect(function()
+            ApplyGlobalAccent(t.Color)
+        end)
+    end
+    
+    -- Feature 5: Custom RGB Accent Color Sliders
+    CreateSlider(SetPage, "Custom Accent Red (R)", 0, 255, Config.AccentR, function(val)
+        Config.AccentR = val
+        ApplyGlobalAccent(Color3.fromRGB(Config.AccentR, Config.AccentG, Config.AccentB))
+    end)
+    CreateSlider(SetPage, "Custom Accent Green (G)", 0, 255, Config.AccentG, function(val)
+        Config.AccentG = val
+        ApplyGlobalAccent(Color3.fromRGB(Config.AccentR, Config.AccentG, Config.AccentB))
+    end)
+    CreateSlider(SetPage, "Custom Accent Blue (B)", 0, 255, Config.AccentB, function(val)
+        Config.AccentB = val
+        ApplyGlobalAccent(Color3.fromRGB(Config.AccentR, Config.AccentG, Config.AccentB))
+    end)
+    
+    -- Feature 6: ESP Color Customization
+    local ESPColorCard = Instance.new("Frame")
+    ESPColorCard.Size = UDim2.new(1, 0, 0, 85)
+    ESPColorCard.BackgroundColor3 = Color3.fromRGB(20, 30, 48)
+    ESPColorCard.BackgroundTransparency = Config.ButtonOpacity
+    ESPColorCard.BorderSizePixel = 0
+    ESPColorCard.ZIndex = 14
+    ESPColorCard.Parent = SetPage
+    table.insert(allCards, ESPColorCard)
+    
+    local ECC_Corner = Instance.new("UICorner"); ECC_Corner.CornerRadius = UDim.new(0, 10); ECC_Corner.Parent = ESPColorCard
+    local ECC_Stroke = Instance.new("UIStroke"); ECC_Stroke.Color = Color3.fromRGB(100, 116, 139); ECC_Stroke.Thickness = 1; ECC_Stroke.Transparency = 0.65; ECC_Stroke.Parent = ESPColorCard
+    local ECC_Title = Instance.new("TextLabel"); ECC_Title.Size = UDim2.new(1, -20, 0, 20); ECC_Title.Position = UDim2.new(0, 12, 0, 6); ECC_Title.BackgroundTransparency = 1; ECC_Title.Text = "👁️ ESP CHAMS COLOR CUSTOMIZATION"; ECC_Title.TextColor3 = Color3.fromRGB(248, 250, 252); ECC_Title.Font = Enum.Font.GothamBold; ECC_Title.TextSize = 12; ECC_Title.TextXAlignment = Enum.TextXAlignment.Left; ECC_Title.ZIndex = 15; ECC_Title.Parent = ESPColorCard
+    
+    local KillerColorLbl = Instance.new("TextLabel"); KillerColorLbl.Size = UDim2.new(0, 60, 0, 22); KillerColorLbl.Position = UDim2.new(0, 12, 0, 30); KillerColorLbl.BackgroundTransparency = 1; KillerColorLbl.Text = "Killer:"; KillerColorLbl.TextColor3 = Color3.fromRGB(248, 113, 113); KillerColorLbl.Font = Enum.Font.GothamBold; KillerColorLbl.TextSize = 11; KillerColorLbl.Parent = ESPColorCard
+    local killerColors = {
+        {Name = "Red", Col = Color3.fromRGB(239, 68, 68)},
+        {Name = "Purple", Col = Color3.fromRGB(168, 85, 247)},
+        {Name = "Orange", Col = Color3.fromRGB(249, 115, 22)},
+        {Name = "Yellow", Col = Color3.fromRGB(234, 179, 8)}
+    }
+    for idx, kc in ipairs(killerColors) do
+        local b = Instance.new("TextButton")
+        b.Size = UDim2.fromOffset(45, 22)
+        b.Position = UDim2.new(0, 68 + (idx - 1) * 50, 0, 30)
+        b.BackgroundColor3 = kc.Col
+        b.Text = kc.Name
+        b.TextColor3 = Color3.fromRGB(255, 255, 255)
+        b.Font = Enum.Font.GothamBold
+        b.TextSize = 10
+        b.ZIndex = 16
+        b.Parent = ESPColorCard
+        local bc = Instance.new("UICorner"); bc.CornerRadius = UDim.new(0, 4); bc.Parent = b
+        b.Activated:Connect(function() Config.KillerESPColor = kc.Col end)
+    end
+    
+    local SurvColorLbl = Instance.new("TextLabel"); SurvColorLbl.Size = UDim2.new(0, 60, 0, 22); SurvColorLbl.Position = UDim2.new(0, 12, 0, 56); SurvColorLbl.BackgroundTransparency = 1; SurvColorLbl.Text = "Survivor:"; SurvColorLbl.TextColor3 = Color3.fromRGB(56, 189, 248); SurvColorLbl.Font = Enum.Font.GothamBold; SurvColorLbl.TextSize = 11; SurvColorLbl.Parent = ESPColorCard
+    local survColors = {
+        {Name = "Cyan", Col = Color3.fromRGB(56, 189, 248)},
+        {Name = "Green", Col = Color3.fromRGB(34, 197, 94)},
+        {Name = "Pink", Col = Color3.fromRGB(244, 63, 94)},
+        {Name = "White", Col = Color3.fromRGB(255, 255, 255)}
+    }
+    for idx, sc in ipairs(survColors) do
+        local b = Instance.new("TextButton")
+        b.Size = UDim2.fromOffset(45, 22)
+        b.Position = UDim2.new(0, 68 + (idx - 1) * 50, 0, 56)
+        b.BackgroundColor3 = sc.Col
+        b.Text = sc.Name
+        b.TextColor3 = (sc.Name == "White") and Color3.fromRGB(0, 0, 0) or Color3.fromRGB(255, 255, 255)
+        b.Font = Enum.Font.GothamBold
+        b.TextSize = 10
+        b.ZIndex = 16
+        b.Parent = ESPColorCard
+        local bc = Instance.new("UICorner"); bc.CornerRadius = UDim.new(0, 4); bc.Parent = b
+        b.Activated:Connect(function() Config.SurvivorESPColor = sc.Col end)
+    end
+    
+    -- Feature 7: Menu Toggle Keybind Selector
+    local KeyCard = Instance.new("Frame")
+    KeyCard.Size = UDim2.new(1, 0, 0, 68)
+    KeyCard.BackgroundColor3 = Color3.fromRGB(20, 30, 48)
+    KeyCard.BackgroundTransparency = Config.ButtonOpacity
+    KeyCard.BorderSizePixel = 0
+    KeyCard.ZIndex = 14
+    KeyCard.Parent = SetPage
+    table.insert(allCards, KeyCard)
+    
+    local KC_Corner = Instance.new("UICorner"); KC_Corner.CornerRadius = UDim.new(0, 10); KC_Corner.Parent = KeyCard
+    local KC_Stroke = Instance.new("UIStroke"); KC_Stroke.Color = Color3.fromRGB(100, 116, 139); KC_Stroke.Thickness = 1; KC_Stroke.Transparency = 0.65; KC_Stroke.Parent = KeyCard
+    local KC_Title = Instance.new("TextLabel"); KC_Title.Size = UDim2.new(1, -20, 0, 20); KC_Title.Position = UDim2.new(0, 12, 0, 6); KC_Title.BackgroundTransparency = 1; KC_Title.Text = "⌨️ MENU TOGGLE KEYBIND"; KC_Title.TextColor3 = Color3.fromRGB(248, 250, 252); KC_Title.Font = Enum.Font.GothamBold; KC_Title.TextSize = 12; KC_Title.TextXAlignment = Enum.TextXAlignment.Left; KC_Title.ZIndex = 15; KC_Title.Parent = KeyCard
+    
+    local keys = {
+        {Name = "RCtrl", Code = Enum.KeyCode.RightControl},
+        {Name = "RShift", Code = Enum.KeyCode.RightShift},
+        {Name = "LAlt", Code = Enum.KeyCode.LeftAlt},
+        {Name = "Insert", Code = Enum.KeyCode.Insert},
+        {Name = "V Key", Code = Enum.KeyCode.V}
+    }
+    for idx, k in ipairs(keys) do
+        local b = Instance.new("TextButton")
+        b.Size = UDim2.fromOffset(80, 26)
+        b.Position = UDim2.new(0, 12 + (idx - 1) * 90, 0, 32)
+        b.BackgroundColor3 = (Config.ToggleKey == k.Code) and Config.AccentColor or Color3.fromRGB(30, 41, 59)
+        b.Text = k.Name
+        b.TextColor3 = Color3.fromRGB(255, 255, 255)
+        b.Font = Enum.Font.GothamBold
+        b.TextSize = 11
+        b.ZIndex = 16
+        b.Parent = KeyCard
+        local bc = Instance.new("UICorner"); bc.CornerRadius = UDim.new(0, 6); bc.Parent = b
+        b.Activated:Connect(function()
+            Config.ToggleKey = k.Code
+            for _, sibling in ipairs(KeyCard:GetChildren()) do
+                if sibling:IsA("TextButton") then
+                    sibling.BackgroundColor3 = (sibling == b) and Config.AccentColor or Color3.fromRGB(30, 41, 59)
+                end
+            end
+        end)
+    end
+    
+    -- Feature 8: Configuration Persistence (Save & Load)
+    local PersistenceCard = Instance.new("Frame")
+    PersistenceCard.Size = UDim2.new(1, 0, 0, 68)
+    PersistenceCard.BackgroundColor3 = Color3.fromRGB(20, 30, 48)
+    PersistenceCard.BackgroundTransparency = Config.ButtonOpacity
+    PersistenceCard.BorderSizePixel = 0
+    PersistenceCard.ZIndex = 14
+    PersistenceCard.Parent = SetPage
+    table.insert(allCards, PersistenceCard)
+    
+    local PC_Corner = Instance.new("UICorner"); PC_Corner.CornerRadius = UDim.new(0, 10); PC_Corner.Parent = PersistenceCard
+    local PC_Stroke = Instance.new("UIStroke"); PC_Stroke.Color = Color3.fromRGB(100, 116, 139); PC_Stroke.Thickness = 1; PC_Stroke.Transparency = 0.65; PC_Stroke.Parent = PersistenceCard
+    local PC_Title = Instance.new("TextLabel"); PC_Title.Size = UDim2.new(1, -20, 0, 20); PC_Title.Position = UDim2.new(0, 12, 0, 6); PC_Title.BackgroundTransparency = 1; PC_Title.Text = "💾 PROFILE PRESETS & CONFIG PERSISTENCE"; PC_Title.TextColor3 = Color3.fromRGB(248, 250, 252); PC_Title.Font = Enum.Font.GothamBold; PC_Title.TextSize = 12; PC_Title.TextXAlignment = Enum.TextXAlignment.Left; PC_Title.ZIndex = 15; PC_Title.Parent = PersistenceCard
+    
+    local SaveBtn = Instance.new("TextButton")
+    SaveBtn.Size = UDim2.fromOffset(210, 28)
+    SaveBtn.Position = UDim2.new(0, 12, 0, 32)
+    SaveBtn.BackgroundColor3 = Color3.fromRGB(16, 185, 129)
+    SaveBtn.Text = "💾 Save Config (vibecoded_cfg.json)"
+    SaveBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    SaveBtn.Font = Enum.Font.GothamBold
+    SaveBtn.TextSize = 11
+    SaveBtn.ZIndex = 16
+    SaveBtn.Parent = PersistenceCard
+    local sbCorner = Instance.new("UICorner"); sbCorner.CornerRadius = UDim.new(0, 6); sbCorner.Parent = SaveBtn
+    
+    SaveBtn.Activated:Connect(function()
+        if writefile then
+            local data = {
+                SpeedValue = Config.SpeedValue,
+                JumpValue = Config.JumpValue,
+                FlySpeed = Config.FlySpeed,
+                FOVRadius = Config.FOVRadius,
+                AttackRange = Config.AttackRange,
+                LockSmoothness = Config.LockSmoothness,
+                BGOpacity = Config.BGOpacity,
+                ButtonOpacity = Config.ButtonOpacity,
+                CurrentWallpaper = Config.CurrentWallpaper,
+                UIScaleValue = Config.UIScaleValue,
+                AccentR = Config.AccentR,
+                AccentG = Config.AccentG,
+                AccentB = Config.AccentB
+            }
+            writefile("vibecoded_cfg.json", HttpService:JSONEncode(data))
+            SaveBtn.Text = "✅ Config Saved Successfully!"
+            task.delay(1.5, function() SaveBtn.Text = "💾 Save Config (vibecoded_cfg.json)" end)
+        else
+            SaveBtn.Text = "⚠️ writefile not supported"
+        end
+    end)
+    
+    local LoadBtn = Instance.new("TextButton")
+    LoadBtn.Size = UDim2.fromOffset(210, 28)
+    LoadBtn.Position = UDim2.new(0, 230, 0, 32)
+    LoadBtn.BackgroundColor3 = Color3.fromRGB(14, 165, 233)
+    LoadBtn.Text = "📂 Load Saved Configuration"
+    LoadBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    LoadBtn.Font = Enum.Font.GothamBold
+    LoadBtn.TextSize = 11
+    LoadBtn.ZIndex = 16
+    LoadBtn.Parent = PersistenceCard
+    local lbCorner = Instance.new("UICorner"); lbCorner.CornerRadius = UDim.new(0, 6); lbCorner.Parent = LoadBtn
+    
+    LoadBtn.Activated:Connect(function()
+        if isfile and isfile("vibecoded_cfg.json") and readfile then
+            local content = readfile("vibecoded_cfg.json")
+            local parsed = HttpService:JSONDecode(content)
+            if parsed then
+                if parsed.SpeedValue then Config.SpeedValue = parsed.SpeedValue end
+                if parsed.JumpValue then Config.JumpValue = parsed.JumpValue end
+                if parsed.CurrentWallpaper then
+                    Config.CurrentWallpaper = parsed.CurrentWallpaper
+                    task.spawn(function()
+                        local resolved = LoadImageSource(Config.CurrentWallpaper)
+                        if resolved and BeachBG and BeachBG.Parent then
+                            BeachBG.Image = ""
+                            task.wait(0.05)
+                            BeachBG.Image = resolved
+                            BeachBG.ImageTransparency = Config.BGOpacity
+                        end
+                    end)
+                end
+                if parsed.BGOpacity then
+                    Config.BGOpacity = parsed.BGOpacity
+                    BeachBG.ImageTransparency = Config.BGOpacity
+                end
+                if parsed.UIScaleValue then
+                    Config.UIScaleValue = parsed.UIScaleValue
+                    MainScale.Scale = Config.UIScaleValue / 100
+                end
+                if parsed.AccentR and parsed.AccentG and parsed.AccentB then
+                    Config.AccentR = parsed.AccentR
+                    Config.AccentG = parsed.AccentG
+                    Config.AccentB = parsed.AccentB
+                    ApplyGlobalAccent(Color3.fromRGB(parsed.AccentR, parsed.AccentG, parsed.AccentB))
+                end
+                LoadBtn.Text = "✅ Config Loaded!"
+                task.delay(1.5, function() LoadBtn.Text = "📂 Load Saved Configuration" end)
+            end
+        else
+            LoadBtn.Text = "❌ No saved file found"
+            task.delay(1.5, function() LoadBtn.Text = "📂 Load Saved Configuration" end)
+        end
+    end)
+    
+    -- Feature 9: Floating Pill & Clean Unload
+    CreateToggle(SetPage, "Show Floating Vibe Pill", "Displays small on-screen button to open/close menu", Config.FloatingPill, function(val)
+        Config.FloatingPill = val
+        PillBtn.Visible = val
+    end)
+    
+    local UnloadCard = Instance.new("Frame")
+    UnloadCard.Size = UDim2.new(1, 0, 0, 56)
+    UnloadCard.BackgroundColor3 = Color3.fromRGB(20, 30, 48)
+    UnloadCard.BackgroundTransparency = Config.ButtonOpacity
+    UnloadCard.BorderSizePixel = 0
+    UnloadCard.ZIndex = 14
+    UnloadCard.Parent = SetPage
+    table.insert(allCards, UnloadCard)
+    
+    local UC_Corner = Instance.new("UICorner"); UC_Corner.CornerRadius = UDim.new(0, 10); UC_Corner.Parent = UnloadCard
+    local UC_Stroke = Instance.new("UIStroke"); UC_Stroke.Color = Color3.fromRGB(239, 68, 68); UC_Stroke.Thickness = 1; UC_Stroke.Transparency = 0.65; UC_Stroke.Parent = UnloadCard
+    
+    local UnloadBtn = Instance.new("TextButton")
+    UnloadBtn.Size = UDim2.new(1, -24, 0, 38)
+    UnloadBtn.Position = UDim2.new(0, 12, 0.5, -19)
+    UnloadBtn.BackgroundColor3 = Color3.fromRGB(220, 38, 38)
+    UnloadBtn.BackgroundTransparency = 0.5
+    UnloadBtn.Text = "🛑 Clean Unload (Destroy UI & Restore Defaults)"
+    UnloadBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    UnloadBtn.Font = Enum.Font.GothamBold
+    UnloadBtn.TextSize = 12
+    UnloadBtn.ZIndex = 16
+    UnloadBtn.Active = true
+    UnloadBtn.Parent = UnloadCard
+    
+    local UB_Corner = Instance.new("UICorner"); UB_Corner.CornerRadius = UDim.new(0, 8); UB_Corner.Parent = UnloadBtn
+    
+    UnloadBtn.Activated:Connect(function()
+        if getgenv().VibeBeachUI and typeof(getgenv().VibeBeachUI) == "Instance" then
+            getgenv().VibeBeachUI:Destroy()
+        end
+        if getgenv().VibeBeachCleanups then
+            for _, c in ipairs(getgenv().VibeBeachCleanups) do pcall(function() c:Disconnect() end) end
+        end
+        if getgenv().VibeFlyCleanup then pcall(getgenv().VibeFlyCleanup) end
+        if getgenv().VibeDrawings then
+            for _, d in ipairs(getgenv().VibeDrawings) do pcall(function() d:Remove() end) end
+        end
+        for _, folderName in ipairs({"Entities", "Survivors"}) do
+            local f = workspace:FindFirstChild(folderName)
+            if f then
+                for _, char in ipairs(f:GetChildren()) do
+                    local bb = char:FindFirstChild("VibeStatusBillboard", true)
+                    if bb then bb:Destroy() end
+                end
+            end
+        end
+        if lastSavedBg and isfile and isfile(lastSavedBg) and delfile then
+            pcall(function() delfile(lastSavedBg) end)
+        end
+        Lighting.Ambient = origLighting.Ambient
+        Lighting.OutdoorAmbient = origLighting.OutdoorAmbient
+        Lighting.Brightness = origLighting.Brightness
+        Lighting.ClockTime = origLighting.ClockTime
+        Lighting.FogEnd = origLighting.FogEnd
+        if LocalPlayer.Character then
+            local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if hum then
+                hum.WalkSpeed = 30
+                hum.UseJumpPower = false
+                hum.JumpHeight = 7.2
+            end
+        end
+    end)
+    
+    -- ==========================================
+    -- DRAWINGS & CORE LOOPS
+    -- ==========================================
+    local fovCircle = Drawing.new("Circle")
+    fovCircle.Radius = Config.FOVRadius
+    fovCircle.Filled = false
+    fovCircle.Color = Config.AccentColor
+    fovCircle.Thickness = 1.5
+    fovCircle.Transparency = 0.8
+    fovCircle.Visible = false
+    table.insert(getgenv().VibeDrawings, fovCircle)
+    
+    local predLine = Drawing.new("Line")
+    predLine.Color = Color3.fromRGB(250, 204, 21)
+    predLine.Thickness = 2
+    predLine.Transparency = 0.9
+    predLine.Visible = false
+    table.insert(getgenv().VibeDrawings, predLine)
+    
+    local escapeLine = Drawing.new("Line")
+    escapeLine.Color = Color3.fromRGB(34, 197, 94)
+    escapeLine.Thickness = 2.5
+    escapeLine.Transparency = 1
+    escapeLine.Visible = false
+    table.insert(getgenv().VibeDrawings, escapeLine)
+    
+    local espHighlights = {}
+    
+    local function GetTargetsFolder(role)
+        if role == "Survivors" then
+            return workspace:FindFirstChild("Survivors")
+        elseif role == "Entities" then
+            return workspace:FindFirstChild("Entities")
+        end
+        return nil
+    end
+    
+    local function GetClosestTarget(folder)
+        if not folder or not LocalPlayer.Character then return nil, math.huge end
+        local root = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if not root then return nil, math.huge end
+        local closest, minDist = nil, math.huge
+        for _, model in ipairs(folder:GetChildren()) do
+            if model:IsA("Model") and model ~= LocalPlayer.Character then
+                local hrp = model:FindFirstChild("HumanoidRootPart")
+                local hum = model:FindFirstChildOfClass("Humanoid")
+                if hrp and hum and hum.Health > 0 then
+                    local dist = (hrp.Position - root.Position).Magnitude
+                    if dist < minDist then
+                        minDist = dist
+                        closest = model
+                    end
+                end
+            end
+        end
+        return closest, minDist
+    end
+    
+    local activeBillboards = {}
+    local function UpdateBillboards(folder, roleColor, isKiller)
+        if not folder then return end
+        local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        for _, char in ipairs(folder:GetChildren()) do
+            if char:IsA("Model") and char ~= LocalPlayer.Character then
+                local head = char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                if head and hum and hum.Health > 0 then
+                    local bb = activeBillboards[char]
+                    if Config.ESPBoxes then
+                        if not bb or bb.Parent ~= head then
+                            if bb then bb:Destroy() end
+                            bb = Instance.new("BillboardGui")
+                            bb.Name = "VibeStatusBillboard"
+                            bb.Adornee = head
+                            bb.Size = UDim2.fromOffset(140, 44)
+                            bb.StudsOffset = Vector3.new(0, 2.5, 0)
+                            bb.AlwaysOnTop = true
+                            bb.LightInfluence = 0
+                            bb.MaxDistance = 600
+                            bb.Parent = head
+                            
+                            local bg = Instance.new("Frame")
+                            bg.Size = UDim2.fromScale(1, 1)
+                            bg.BackgroundColor3 = Color3.fromRGB(15, 23, 42)
+                            bg.BackgroundTransparency = 0.3
+                            bg.BorderSizePixel = 0
+                            bg.Parent = bb
+                            
+                            local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 8); c.Parent = bg
+                            local s = Instance.new("UIStroke"); s.Name = "BorderStroke"; s.Color = roleColor; s.Thickness = 1.2; s.Parent = bg
+                            
+                            local nLbl = Instance.new("TextLabel")
+                            nLbl.Name = "NameLabel"
+                            nLbl.Size = UDim2.new(1, -8, 0, 18)
+                            nLbl.Position = UDim2.new(0, 4, 0, 3)
+                            nLbl.BackgroundTransparency = 1
+                            nLbl.TextColor3 = roleColor
+                            nLbl.Font = Enum.Font.GothamBold
+                            nLbl.TextSize = 11
+                            nLbl.TextTruncate = Enum.TextTruncate.AtEnd
+                            nLbl.Parent = bg
+                            
+                            local sLbl = Instance.new("TextLabel")
+                            sLbl.Name = "StatLabel"
+                            sLbl.Size = UDim2.new(1, -8, 0, 16)
+                            sLbl.Position = UDim2.new(0, 4, 0, 22)
+                            sLbl.BackgroundTransparency = 1
+                            sLbl.TextColor3 = Color3.fromRGB(241, 245, 249)
+                            sLbl.Font = Enum.Font.GothamMedium
+                            sLbl.TextSize = 10
+                            sLbl.Parent = bg
+                            
+                            activeBillboards[char] = bb
+                        end
+                        local dist = myRoot and math.floor((head.Position - myRoot.Position).Magnitude) or 0
+                        local hp = math.floor(hum.Health)
+                        local maxHp = math.floor(hum.MaxHealth)
+                        local roleTag = isKiller and "KILLER" or "SURVIVOR"
+                        local nLbl = bb:FindFirstChild("NameLabel", true)
+                        local sLbl = bb:FindFirstChild("StatLabel", true)
+                        local bs = bb:FindFirstChild("BorderStroke", true)
+                        if nLbl then nLbl.Text = string.format("[%s] %s", roleTag, char.Name); nLbl.TextColor3 = roleColor end
+                        if sLbl then sLbl.Text = string.format("%d studs • %d/%d HP", dist, hp, maxHp) end
+                        if bs then bs.Color = roleColor end
+                    else
+                        if bb then
+                            bb:Destroy()
+                            activeBillboards[char] = nil
+                        end
+                    end
+                elseif activeBillboards[char] then
+                    activeBillboards[char]:Destroy()
+                    activeBillboards[char] = nil
+                end
             end
         end
     end
-end
-
--- RenderStepped Main Loop
-local mainLoop = RunService.RenderStepped:Connect(function()
-    local myChar = LocalPlayer.Character
-    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-    local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
-    local vp = Camera.ViewportSize
-    local center = Vector2.new(vp.X / 2, vp.Y / 2)
     
-    fovCircle.Position = center
-    fovCircle.Radius = Config.FOVRadius
-    fovCircle.Visible = Config.ShowFOV
-    
-    -- Closest Killer Radar Tracking
-    local closestKiller, killerDist = GetClosestTarget(workspace:FindFirstChild("Entities"))
-    
-    if closestKiller and killerDist < math.huge then
-        local distStuds = math.floor(killerDist)
-        if Config.ProximityAlert and distStuds <= Config.ProximityDist then
-            DangerBanner.Visible = true
-            DangerText.Text = string.format("⚠️ DANGER: %s IS %d STUDS AWAY!", closestKiller.Name, distStuds)
-        else
-            DangerBanner.Visible = false
-        end
+    local mainLoop = RunService.RenderStepped:Connect(function()
+        local myChar = LocalPlayer.Character
+        local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+        local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
+        local vp = Camera.ViewportSize
+        local center = Vector2.new(vp.X / 2, vp.Y / 2)
         
-        local zone = "🟢 SAFE (>80m)"
-        if distStuds < 40 then
-            zone = "🔴 EXTREME DANGER (<40m)"
-        elseif distStuds < 80 then
-            zone = "🟡 CAUTION (40-80m)"
-        end
-        HC_Status.Text = string.format("Nearest Killer: %s (%d studs)\nSafety Zone: %s", closestKiller.Name, distStuds, zone)
+        fovCircle.Position = center
+        fovCircle.Radius = Config.FOVRadius
+        fovCircle.Color = Config.AccentColor
+        fovCircle.Visible = Config.ShowFOV
         
-        if Config.AutoEvade and myHum and distStuds <= Config.EvadeDistance then
-            myHum.WalkSpeed = 65
-        end
+        local closestKiller, killerDist = GetClosestTarget(workspace:FindFirstChild("Entities"))
         
-        if Config.EscapeVector and myRoot and closestKiller:FindFirstChild("HumanoidRootPart") then
-            local awayDir = (myRoot.Position - closestKiller.HumanoidRootPart.Position).Unit
-            local targetPoint = myRoot.Position + awayDir * 35
-            local sp1, v1 = Camera:WorldToViewportPoint(myRoot.Position)
-            local sp2, v2 = Camera:WorldToViewportPoint(targetPoint)
-            if v1 and v2 then
-                escapeLine.From = Vector2.new(sp1.X, sp1.Y)
-                escapeLine.To = Vector2.new(sp2.X, sp2.Y)
-                escapeLine.Visible = true
+        if closestKiller and killerDist < math.huge then
+            local distStuds = math.floor(killerDist)
+            if Config.ProximityAlert and distStuds <= Config.ProximityDist then
+                DangerBanner.Visible = true
+                DangerText.Text = string.format("⚠️ DANGER: %s IS %d STUDS AWAY!", closestKiller.Name, distStuds)
+            else
+                DangerBanner.Visible = false
+            end
+            
+            local zone = "🟢 SAFE (>80m)"
+            if distStuds < 40 then
+                zone = "🔴 EXTREME DANGER (<40m)"
+            elseif distStuds < 80 then
+                zone = "🟡 CAUTION (40-80m)"
+            end
+            HC_Status.Text = string.format("Nearest Killer: %s (%d studs)\nSafety Zone: %s", closestKiller.Name, distStuds, zone)
+            
+            if Config.AutoEvade and myHum and distStuds <= Config.EvadeDistance then
+                myHum.WalkSpeed = 65
+            end
+            
+            if Config.EscapeVector and myRoot and closestKiller:FindFirstChild("HumanoidRootPart") then
+                local awayDir = (myRoot.Position - closestKiller.HumanoidRootPart.Position).Unit
+                local targetPoint = myRoot.Position + awayDir * 35
+                local sp1, v1 = Camera:WorldToViewportPoint(myRoot.Position)
+                local sp2, v2 = Camera:WorldToViewportPoint(targetPoint)
+                if v1 and v2 then
+                    escapeLine.From = Vector2.new(sp1.X, sp1.Y)
+                    escapeLine.To = Vector2.new(sp2.X, sp2.Y)
+                    escapeLine.Visible = true
+                else
+                    escapeLine.Visible = false
+                end
             else
                 escapeLine.Visible = false
             end
         else
+            DangerBanner.Visible = false
+            HC_Status.Text = "Nearest Killer: None detected\nSafety Zone: 🟢 SAFE (>80m)"
             escapeLine.Visible = false
         end
-    else
-        DangerBanner.Visible = false
-        HC_Status.Text = "Nearest Killer: None detected\nSafety Zone: 🟢 SAFE (>80m)"
-        escapeLine.Visible = false
-    end
-    
-    -- 360-Degree Target Lock (Aim Assist)
-    local targetFolder = GetTargetsFolder(Config.TargetRole)
-    local closestSurv, survDist = GetClosestTarget(targetFolder)
-    
-    if closestSurv and survDist < math.huge then
-        local sRoot = closestSurv:FindFirstChild("HumanoidRootPart")
-        local sHum = closestSurv:FindFirstChildOfClass("Humanoid")
-        TargetStatusLbl.Text = string.format("🎯 Locked Target: %s [%d studs away - %d HP]", closestSurv.Name, math.floor(survDist), sHum and math.floor(sHum.Health) or 0)
         
-        if Config.PathPrediction and sRoot then
-            local vel = sRoot.AssemblyLinearVelocity or sRoot.Velocity
-            local predictedPos = sRoot.Position + (vel * 0.4)
-            local p1, v1 = Camera:WorldToViewportPoint(sRoot.Position)
-            local p2, v2 = Camera:WorldToViewportPoint(predictedPos)
-            if v1 and v2 then
-                predLine.From = Vector2.new(p1.X, p1.Y)
-                predLine.To = Vector2.new(p2.X, p2.Y)
-                predLine.Visible = true
+        local targetFolder = GetTargetsFolder(Config.TargetRole)
+        local closestSurv, survDist = GetClosestTarget(targetFolder)
+        
+        if closestSurv and survDist < math.huge then
+            local sRoot = closestSurv:FindFirstChild("HumanoidRootPart")
+            local sHum = closestSurv:FindFirstChildOfClass("Humanoid")
+            TargetStatusLbl.Text = string.format("🎯 Locked Target: %s [%d studs away - %d HP]", closestSurv.Name, math.floor(survDist), sHum and math.floor(sHum.Health) or 0)
+            
+            if Config.PathPrediction and sRoot then
+                local vel = sRoot.AssemblyLinearVelocity or sRoot.Velocity
+                local predictedPos = sRoot.Position + (vel * 0.4)
+                local p1, v1 = Camera:WorldToViewportPoint(sRoot.Position)
+                local p2, v2 = Camera:WorldToViewportPoint(predictedPos)
+                if v1 and v2 then
+                    predLine.From = Vector2.new(p1.X, p1.Y)
+                    predLine.To = Vector2.new(p2.X, p2.Y)
+                    predLine.Visible = true
+                else
+                    predLine.Visible = false
+                end
             else
                 predLine.Visible = false
             end
-        else
-            predLine.Visible = false
-        end
-        
-        if Config.TargetLock and sRoot and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
-            local canLock = false
-            if Config.Lock360 then
-                canLock = true
-            else
-                local screenPos, onScreen = Camera:WorldToViewportPoint(sRoot.Position)
-                if onScreen then
-                    local distToCenter = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
-                    if distToCenter <= Config.FOVRadius then
-                        canLock = true
+            
+            if Config.TargetLock and sRoot and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
+                local canLock = false
+                if Config.Lock360 then
+                    canLock = true
+                else
+                    local screenPos, onScreen = Camera:WorldToViewportPoint(sRoot.Position)
+                    if onScreen then
+                        local distToCenter = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
+                        if distToCenter <= Config.FOVRadius then
+                            canLock = true
+                        end
                     end
+                end
+                
+                if canLock then
+                    local currentCF = Camera.CFrame
+                    local targetPos = sRoot.Position + Vector3.new(0, 1.5, 0)
+                    local targetCF = CFrame.lookAt(currentCF.Position, targetPos)
+                    local lerpFactor = math.clamp(Config.LockSmoothness / 10, 0.08, 0.95)
+                    Camera.CFrame = currentCF:Lerp(targetCF, lerpFactor)
                 end
             end
             
-            if canLock then
-                local currentCF = Camera.CFrame
-                local targetPos = sRoot.Position + Vector3.new(0, 1.5, 0)
-                local targetCF = CFrame.lookAt(currentCF.Position, targetPos)
-                local lerpFactor = math.clamp(Config.LockSmoothness / 10, 0.08, 0.95)
-                Camera.CFrame = currentCF:Lerp(targetCF, lerpFactor)
+            if Config.LookAtTarget and myRoot and sRoot then
+                myRoot.CFrame = CFrame.lookAt(myRoot.Position, Vector3.new(sRoot.Position.X, myRoot.Position.Y, sRoot.Position.Z))
             end
+            
+            if Config.AutoSwing and survDist <= Config.AttackRange then
+                if mouse1click then
+                    mouse1click()
+                elseif VirtualInputManager then
+                    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+                    task.wait(0.05)
+                    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+                end
+            end
+        else
+            TargetStatusLbl.Text = "🎯 Locked Target: None [0m away]"
+            predLine.Visible = false
         end
         
-        if Config.LookAtTarget and myRoot and sRoot then
-            myRoot.CFrame = CFrame.lookAt(myRoot.Position, Vector3.new(sRoot.Position.X, myRoot.Position.Y, sRoot.Position.Z))
-        end
-        
-        if Config.AutoSwing and survDist <= Config.AttackRange then
-            if mouse1click then
-                mouse1click()
-            elseif VirtualInputManager then
-                VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
-                task.wait(0.05)
-                VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
-            end
-        end
-    else
-        TargetStatusLbl.Text = "🎯 Locked Target: None [0m away]"
-        predLine.Visible = false
-    end
-    
-    -- ESP Highlights
-    local function ManageESP(folder, color, enabled)
-        if not folder then return end
-        for _, char in ipairs(folder:GetChildren()) do
-            if char:IsA("Model") and char ~= LocalPlayer.Character then
-                local h = espHighlights[char]
-                if enabled then
-                    if not h or h.Parent ~= char then
-                        h = Instance.new("Highlight")
-                        h.FillColor = color
-                        h.OutlineColor = Color3.fromRGB(255, 255, 255)
-                        h.FillTransparency = 0.4
-                        h.OutlineTransparency = 0
-                        h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-                        h.Parent = char
-                        espHighlights[char] = h
+        -- ESP Highlights with Customizable Colors
+        local function ManageESP(folder, color, enabled)
+            if not folder then return end
+            for _, char in ipairs(folder:GetChildren()) do
+                if char:IsA("Model") and char ~= LocalPlayer.Character then
+                    local h = espHighlights[char]
+                    if enabled then
+                        if not h or h.Parent ~= char then
+                            h = Instance.new("Highlight")
+                            h.FillColor = color
+                            h.OutlineColor = Color3.fromRGB(255, 255, 255)
+                            h.FillTransparency = 0.4
+                            h.OutlineTransparency = 0
+                            h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                            h.Parent = char
+                            espHighlights[char] = h
+                        else
+                            h.FillColor = color
+                        end
+                    elseif h then
+                        h:Destroy()
+                        espHighlights[char] = nil
                     end
-                elseif h then
-                    h:Destroy()
-                    espHighlights[char] = nil
                 end
             end
         end
-    end
-    ManageESP(workspace:FindFirstChild("Entities"), Color3.fromRGB(239, 68, 68), Config.AberrantESP)
-    ManageESP(workspace:FindFirstChild("Survivors"), Color3.fromRGB(56, 189, 248), Config.SurvivorESP)
-    
-    -- Status Billboards Update
-    UpdateBillboards(workspace:FindFirstChild("Entities"), Color3.fromRGB(239, 68, 68), true)
-    UpdateBillboards(workspace:FindFirstChild("Survivors"), Color3.fromRGB(56, 189, 248), false)
-    
-    -- Movement Enforcement
-    if Config.SpeedEnabled and myHum then
-        myHum.WalkSpeed = Config.SpeedValue
-    end
-    if Config.JumpEnabled and myHum then
-        myHum.UseJumpPower = true
-        myHum.JumpPower = Config.JumpValue
-    end
-    if Config.AntiStagger and myHum then
-        if myHum.WalkSpeed < Config.SpeedValue and Config.SpeedEnabled then
+        ManageESP(workspace:FindFirstChild("Entities"), Config.KillerESPColor, Config.AberrantESP)
+        ManageESP(workspace:FindFirstChild("Survivors"), Config.SurvivorESPColor, Config.SurvivorESP)
+        
+        -- Status Billboards with Customizable Colors
+        UpdateBillboards(workspace:FindFirstChild("Entities"), Config.KillerESPColor, true)
+        UpdateBillboards(workspace:FindFirstChild("Survivors"), Config.SurvivorESPColor, false)
+        
+        if Config.SpeedEnabled and myHum then
             myHum.WalkSpeed = Config.SpeedValue
         end
-    end
-end)
-table.insert(getgenv().VibeBeachCleanups, mainLoop)
-
--- Infinite Jump
-local jumpConn = UserInputService.JumpRequest:Connect(function()
-    if Config.InfiniteJump and LocalPlayer.Character then
-        local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-        if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
-    end
-end)
-table.insert(getgenv().VibeBeachCleanups, jumpConn)
-
--- Noclip
-local noclipConn = RunService.Stepped:Connect(function()
-    if Config.Noclip and LocalPlayer.Character then
-        for _, part in ipairs(LocalPlayer.Character:GetDescendants()) do
-            if part:IsA("BasePart") then part.CanCollide = false end
+        if Config.JumpEnabled and myHum then
+            myHum.UseJumpPower = true
+            myHum.JumpPower = Config.JumpValue
         end
-    end
+        if Config.AntiStagger and myHum then
+            if myHum.WalkSpeed < Config.SpeedValue and Config.SpeedEnabled then
+                myHum.WalkSpeed = Config.SpeedValue
+            end
+        end
+    end)
+    table.insert(getgenv().VibeBeachCleanups, mainLoop)
+    
+    local jumpConn = UserInputService.JumpRequest:Connect(function()
+        if Config.InfiniteJump and LocalPlayer.Character then
+            local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
+        end
+    end)
+    table.insert(getgenv().VibeBeachCleanups, jumpConn)
+    
+    local noclipConn = RunService.Stepped:Connect(function()
+        if Config.Noclip and LocalPlayer.Character then
+            for _, part in ipairs(LocalPlayer.Character:GetDescendants()) do
+                if part:IsA("BasePart") then part.CanCollide = false end
+            end
+        end
+    end)
+    table.insert(getgenv().VibeBeachCleanups, noclipConn)
+    
+    return true
 end)
-table.insert(getgenv().VibeBeachCleanups, noclipConn)
-
-print("[Vibecoded] Full 7-Tab Suite Loaded Successfully!")
+return {success = success, err = tostring(err)}
