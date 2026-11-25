@@ -1,10 +1,17 @@
 --[[
-   Uwu 
+    JOMA Suite (Optimized & Fixed)
+    - High-performance cached ESP, Billboards, Tracers, Radar & Telemetry
+    - Fixed slider connection leaks, RenderStepped blocking, Fly mode, Adversary ESP, CleanScreenFX, AntiRagdoll
+    - Added Auto Parry for Knight (Parry) & Jester (Taunt Dodge)
+    - Auto Parry now has a CLASS CHECK (only works if you really are Knight/Jester)
+      and a TEAM CHECK (ignores teammates; toggle in the Survivor tab)
+    - UI v3: movable tab bar (Top / Bottom / Left / Right), rounder corners, fade+scale menu animation,
+      smooth drag, animated tab switching, hover effects, FPS footer
 ]]
 
-print("Fucking this was so hard i wasn't even motivated to do this")
 local success, err = pcall(function()
 	local Players = game:GetService("Players")
+	local Teams = game:GetService("Teams")
 	local RunService = game:GetService("RunService")
 	local TweenService = game:GetService("TweenService")
 	local UserInputService = game:GetService("UserInputService")
@@ -120,6 +127,7 @@ local success, err = pcall(function()
 		PredictionMs = 180,
 		-- Tab 6: Survivor's Helper & Auto Parry
 		AutoParryEnabled = false,
+		TeamCheck = true, -- ignore teammates (only parry when a hostile entity is in range)
 		AutoParryClass = "Auto", -- "Auto", "Knight", "Jester"
 		AutoParryRange = 24,
 		AutoParryDelayMs = 0,
@@ -1411,6 +1419,9 @@ local success, err = pcall(function()
 	CreateToggle(SurvPage, "Auto Parry (Knight & Jester)", "Auto-triggers Knight Parry or Jester Taunt Dodge on killer swing", Config.AutoParryEnabled, function(val)
 		Config.AutoParryEnabled = val
 	end)
+	CreateToggle(SurvPage, "Team Check (Auto Parry)", "Ignores teammates: only parries when a hostile entity is in range", Config.TeamCheck, function(val)
+		Config.TeamCheck = val
+	end)
 
 	-- Class Mode Selector Card
 	local ClassCard = Instance.new("Frame")
@@ -1955,16 +1966,18 @@ local success, err = pcall(function()
 	}
 
 	local lastParryTime = 0
-	local function detectSurvivorClass(char)
-		if Config.AutoParryClass ~= "Auto" then
-			return Config.AutoParryClass
-		end
+
+	-- CLASS CHECK: what class am I REALLY playing? (nil = not Knight/Jester)
+	local function getActualClass(char)
 		if not char then
-			return "Knight"
+			return nil
 		end
 		local selected = char:GetAttribute("SelectedSurvivor")
 		if selected == "Knight" or selected == "Jester" then
 			return selected
+		end
+		if type(selected) == "string" and selected ~= "" then
+			return nil -- explicitly a different class
 		end
 		local animFolder = char:FindFirstChild("AnimFolder")
 		if animFolder then
@@ -1979,7 +1992,65 @@ local success, err = pcall(function()
 		if string.find(attr, "jester") then
 			return "Jester"
 		end
-		return "Knight"
+		if string.find(attr, "knight") then
+			return "Knight"
+		end
+		return nil
+	end
+
+	-- Returns the class auto parry should act as, or nil when auto parry must stay off
+	local function detectSurvivorClass(char)
+		local actual = getActualClass(char)
+		if not actual then
+			return nil
+		end
+		if Config.AutoParryClass ~= "Auto" then
+			return Config.AutoParryClass
+		end
+		return actual
+	end
+
+	-- TEAM CHECK: player entities use their Team, NPC killers count as Adversaries
+	local function entityTeam(model)
+		local plr = Players:FindFirstChild(model.Name)
+		if plr then
+			return plr.Team
+		end
+		return Teams:FindFirstChild("Adversaries")
+	end
+
+	local function isHostile(model)
+		local mine = LocalPlayer.Team
+		if not mine or mine.Name == "Unassigned" then
+			return true
+		end
+		local theirs = entityTeam(model)
+		if not theirs then
+			return true
+		end
+		return theirs ~= mine
+	end
+
+	-- true if at least one hostile entity is close enough to be the one attacking me
+	local function hostileInRange()
+		local ef = workspace:FindFirstChild("Entities")
+		local myRootPart = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+		if not (ef and myRootPart) then
+			return true
+		end
+		local range = math.max(Config.AutoParryRange, 25) -- 25 covers the delayed-parry moves
+		for _, m in ipairs(ef:GetChildren()) do
+			if m:IsA("Model") and m ~= LocalPlayer.Character then
+				local r = m:FindFirstChild("HumanoidRootPart") or m.PrimaryPart
+				local h = m:FindFirstChildOfClass("Humanoid")
+				if r and (not h or h.Health > 0) and (r.Position - myRootPart.Position).Magnitude <= range then
+					if isHostile(m) then
+						return true
+					end
+				end
+			end
+		end
+		return false
 	end
 
 	local function getAbilityFrame(abilityName)
@@ -2009,7 +2080,16 @@ local success, err = pcall(function()
 			return
 		end
 
+		-- CLASS CHECK: only Knight / Jester may auto parry
 		local classType = detectSurvivorClass(myChar)
+		if not classType then
+			return
+		end
+		-- TEAM CHECK: ignore teammates, need a hostile entity in range
+		if Config.TeamCheck and not hostileInRange() then
+			return
+		end
+
 		local abilityName = (classType == "Jester") and "Taunt" or "Parry"
 		local abilityFrame = getAbilityFrame(abilityName)
 
@@ -2183,8 +2263,16 @@ local success, err = pcall(function()
 			return myRoot and eRoot and ((myRoot.Position - eRoot.Position).Magnitude <= Config.AutoParryRange)
 		end
 
+		-- TEAM CHECK for this specific entity (teammates never trigger a parry)
+		local function isEnemy()
+			return (not Config.TeamCheck) or isHostile(entity)
+		end
+
 		local function canCounterName(lowerName)
 			local classType = detectSurvivorClass(LocalPlayer.Character)
+			if not classType then
+				return false
+			end
 			if classType == "Jester" then
 				return not isUndodgeableForJester(lowerName)
 			end
@@ -2196,7 +2284,7 @@ local success, err = pcall(function()
 			if not Config.AutoParryEnabled then
 				return
 			end
-			if (child.Name == "ATKDISABLED" or child.Name == "InMove") and inParryRange() then
+			if (child.Name == "ATKDISABLED" or child.Name == "InMove") and inParryRange() and isEnemy() then
 				triggerParry()
 			end
 		end))
@@ -2229,6 +2317,9 @@ local success, err = pcall(function()
 
 		TrackConn(animator.AnimationPlayed:Connect(function(track)
 			if not Config.AutoParryEnabled then
+				return
+			end
+			if not isEnemy() then
 				return
 			end
 			local animObj = track.Animation
@@ -2277,7 +2368,11 @@ local success, err = pcall(function()
 				return
 			end
 
+			-- CLASS CHECK: nothing to do unless I'm really Knight / Jester
 			local classType = detectSurvivorClass(LocalPlayer.Character)
+			if not classType then
+				return
+			end
 			if classType == "Jester" then
 				if (animId ~= "" and undodgeableIds[animId]) or isUndodgeableForJester(animName) then
 					return
@@ -2322,7 +2417,7 @@ local success, err = pcall(function()
 					or string.find(lower, "bite")
 					or string.find(lower, "claw")
 				then
-					if inParryRange() then
+					if inParryRange() and isEnemy() then
 						triggerParry()
 					end
 				end
@@ -2856,7 +2951,7 @@ local success, err = pcall(function()
 				survCount,
 				killerCount,
 				Config.AutoParryEnabled and "ON" or "OFF",
-				Config.AutoParryClass
+				tostring(getActualClass(myChar) or "Unsupported class")
 			)
 			RosterBody.Text = (#survLines > 0) and table.concat(survLines, "\n") or "No alive survivors detected."
 			ThreatBody.Text = (#killerLines > 0) and table.concat(killerLines, "\n") or "No active killers detected."
